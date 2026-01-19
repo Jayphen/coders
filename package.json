@@ -1,0 +1,17 @@
+{
+  "name": "@jayphen/coders",
+  "version": "1.0.0",
+  "description": "Spawn AI coding assistants in isolated tmux sessions - CLI + Claude Code Skill",
+  "main": "scripts/claude-code/coders.js",
+  "types": "scripts/claude-code/coders.d.ts",
+  "scripts": {
+    "test": "node scripts/main.js list"
+  },
+  "author": "Steve",
+  "repository": "https://github.com/Jayphen/coders",
+  "keywords": ["claude-code", "ai", "claude", "gemini", "codex", "spawn", "tmux"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
