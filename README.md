@@ -31,7 +31,20 @@ cd coders
 npm install
 ```
 
-Then import and use:
+#### Interactive Mode (prompts for missing info)
+
+```typescript
+import { coders } from '@jayphen/coders';
+
+// Just say "spawn Claude" and it prompts for task/worktree
+await coders.spawn({ tool: 'claude' });
+// Prompts:
+// - "What should this session work on?"  
+// - "Create a git worktree?" 
+// - "Include a PRD file?"
+```
+
+#### Direct Mode (all options upfront)
 
 ```typescript
 import { coders } from '@jayphen/coders';
@@ -39,18 +52,22 @@ import { coders } from '@jayphen/coders';
 // Spawn Claude in new tmux window
 await coders.spawn({
   tool: 'claude',
-  task: 'Review this PR and suggest improvements',
-  worktree: 'feature-review',
-  prd: 'docs/prd.md'
+  task: 'Refactor the authentication module',
+  worktree: 'feature/auth-refactor',
+  prd: 'docs/auth-prd.md'
 });
 
-// Quick helpers
+// Quick helpers - minimal typing
 await coders.claude('Fix the bug', { worktree: 'fix-auth' });
-await coders.gemini('Research this approach');
+await coders.gemini('Research JWT approaches');
 
+// List, attach, kill
 coders.list();
 coders.attach('session-name');
 coders.kill('session-name');
+
+// Quick worktree syntax
+await coders.worktree('feature/new', 'Build the new feature');
 ```
 
 ## Features
@@ -59,6 +76,7 @@ coders.kill('session-name');
 - **PRD Priming**: Feeds context to the AI before it starts
 - **Tmux Sessions**: Runs in separate tmux windows
 - **Recursive Spawning**: Claude instances can spawn more Claudes (`--dangerously-spawn-permission`)
+- **Interactive Prompts**: Asks for missing info when options aren't provided
 
 ## Requirements
 
