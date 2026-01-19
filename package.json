@@ -5,13 +5,31 @@
   "main": "scripts/claude-code/coders.js",
   "types": "scripts/claude-code/coders.d.ts",
   "scripts": {
-    "test": "node scripts/main.js list"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "node --experimental-vm-modules node_modules/vitest/vitest.mjs run scripts/claude-code/coders.test.js 2>/dev/null || node scripts/claude-code/coders.test.js"
   },
   "author": "Steve",
   "repository": "https://github.com/Jayphen/coders",
-  "keywords": ["claude-code", "ai", "claude", "gemini", "codex", "spawn", "tmux"],
+  "keywords": [
+    "claude-code",
+    "ai",
+    "claude",
+    "gemini",
+    "codex",
+    "spawn",
+    "tmux"
+  ],
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
+  },
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Jayphen/coders/issues"
+  },
+  "homepage": "https://github.com/Jayphen/coders#readme",
+  "devDependencies": {
+    "vitest": "^1.0.0"
   }
 }
