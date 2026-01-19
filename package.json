@@ -2,12 +2,12 @@
   "name": "@jayphen/coders",
   "version": "1.0.0",
   "description": "Spawn AI coding assistants in isolated tmux sessions - CLI + Claude Code Skill",
-  "main": "scripts/claude-code/coders.js",
-  "types": "scripts/claude-code/coders.d.ts",
+  "main": "dist/claude-code/coders.js",
+  "types": "dist/claude-code/coders.d.ts",
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:unit": "node --experimental-vm-modules node_modules/vitest/vitest.mjs run scripts/claude-code/coders.test.js 2>/dev/null || node scripts/claude-code/coders.test.js"
+    "build": "tsc",
+    "test": "node scripts/test.js",
+    "test:unit": "tsc && node dist/claude-code/coders.test.js"
   },
   "author": "Steve",
   "repository": "https://github.com/Jayphen/coders",
@@ -30,6 +30,8 @@
   },
   "homepage": "https://github.com/Jayphen/coders#readme",
   "devDependencies": {
+    "@types/node": "^25.0.9",
+    "typescript": "^5.9.3",
     "vitest": "^1.0.0"
   }
 }
