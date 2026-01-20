@@ -2,6 +2,11 @@
 
 Spawn AI coding assistants (Claude, Gemini, Codex, OpenCode) in isolated tmux sessions with optional git worktrees.
 
+## Prerequisites
+
+- **tmux** - Required for session management
+- **Redis** - Required for coordination and heartbeat monitoring
+
 ## Two Ways to Use
 
 ### 1. Claude Code Plugin (Recommended)
@@ -84,7 +89,7 @@ coders spawn claude --task "Hello world"
 - **Git Worktrees**: Creates isolated branches for each task
 - **PRD Priming**: Feeds context to the AI before it starts
 - **Tmux Sessions**: Runs in separate tmux windows
-- **Redis Heartbeat** (optional): Auto-respawn dead panes, pub/sub for inter-agent communication
+- **Redis Heartbeat**: Auto-respawn dead panes, pub/sub for inter-agent communication
 - **Tmux Resurrect**: Snapshot/restore entire swarm
 
 <img width="1505" height="1331" alt="Dashboard" src="https://github.com/user-attachments/assets/a9f46996-670c-4e13-975c-d8e381aaa0ab" />
@@ -116,7 +121,7 @@ sleep 0.5  # Let TUI process input
 tmux send-keys -t SESSION C-m  # Submit
 ```
 
-### Redis Heartbeat & Auto-Respawn (Optional)
+### Redis Heartbeat & Auto-Respawn
 
 Enable Redis for heartbeat monitoring and auto-respawn:
 
@@ -156,8 +161,8 @@ restore();    // Restores from latest snapshot
 
 ## Requirements
 
-- tmux installed
-- Redis (optional, for heartbeat/pub/sub)
+- **tmux** - Required
+- **Redis** - Required (for coordination/heartbeat)
 - Claude Code CLI (`npm i -g @anthropic-ai/claude-code`) - optional
 - Gemini CLI (`npm i -g @googlelabs/gemini-cli`) - optional
 - OpenAI Codex CLI (`pip install openai-codex`) - optional

@@ -188,9 +188,9 @@ tmux capture-pane -t coder-SESSION_ID -p | tail -20
 
 ## Requirements
 
-- **tmux** - Session management
+- **tmux** - Required for session management
+- **Redis** - Required for coordination and heartbeat monitoring
 - **git** - For worktree support (optional)
-- **Redis** - For inter-agent coordination (optional)
 - **Node.js 18+** - Runtime
 
 ## Tips
