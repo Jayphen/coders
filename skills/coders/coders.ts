@@ -59,6 +59,8 @@ export interface SpawnOptions {
   enableHeartbeat?: boolean;
   paneId?: string;
   parentSessionId?: string;
+  /** Custom working directory for the session (overrides worktree path) */
+  cwd?: string;
 }
 
 export interface CoderSession {
@@ -248,7 +250,8 @@ export async function spawn(options: SpawnOptions): Promise<string> {
     redis: redisConfig,
     enableHeartbeat = !!redisConfig?.url,
     paneId: providedPaneId,
-    parentSessionId: providedParentSessionId
+    parentSessionId: providedParentSessionId,
+    cwd: customCwd
   } = options;
 
   // Auto-detect parent session if running inside a coder session
@@ -275,22 +278,27 @@ export async function spawn(options: SpawnOptions): Promise<string> {
     }
   }
   
+  // Determine effective working directory: customCwd > worktreePath > current directory
+  const effectiveCwd = customCwd
+    ? (path.isAbsolute(customCwd) ? customCwd : path.resolve(process.cwd(), customCwd))
+    : (worktreePath || process.cwd());
+
   // Build prompt with optional PRD and Redis context
   const contextFiles = prd ? [prd] : [];
   const prompt = createPrompt(task, contextFiles, paneId, redisConfig);
   const promptFile = `/tmp/coders-prompt-${Date.now()}.txt`;
   fs.writeFileSync(promptFile, prompt);
-  
-  // Build command with environment variables
-  const cmd = buildCommand(tool, promptFile, worktreePath, paneId, redisConfig, sessionId, parentSessionId);
+
+  // Build command with environment variables (use effectiveCwd for WORKSPACE_DIR)
+  const cmd = buildCommand(tool, promptFile, effectiveCwd, paneId, redisConfig, sessionId, parentSessionId);
 
   try {
     // Clean up existing session if any
     try { execSync(`tmux kill-session -t ${sessionId}`); } catch {}
-    
-    // Create new tmux session
-    execSync(`tmux new-session -s "${sessionId}" -d "${cmd}"`);
-    
+
+    // Create new tmux session with cd to effectiveCwd
+    execSync(`tmux new-session -s "${sessionId}" -d "cd ${effectiveCwd}; ${cmd}"`);
+
     // Store pane info for Redis if configured
     if (redisConfig?.url) {
       const redis = new RedisManager(redisConfig);
@@ -299,14 +307,15 @@ export async function spawn(options: SpawnOptions): Promise<string> {
       await redis.disconnect();
       // Note: heartbeat is handled separately by heartbeat.js spawned in main.js
     }
-    
+
     return `
 🤖 Spawned **${tool}** in new tmux window!
 
 **Session:** ${sessionId}
 **Pane ID:** ${paneId}
 **Parent:** ${parentSessionId || 'none (root session)'}
-**Worktree:** ${worktreePath || 'main repo'}
+**Working Directory:** ${effectiveCwd}
+**Worktree:** ${worktreePath || 'none'}
 **Task:** ${task}
 **PRD:** ${prd || 'none'}
 **Redis:** ${redisConfig?.url || 'disabled'}
@@ -372,6 +381,7 @@ export async function claude(
     prd?: string;
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
+    cwd?: string;
   }
 ): Promise<string> {
   return spawn({ tool: 'claude', task, ...options });
@@ -385,6 +395,7 @@ export async function gemini(
     prd?: string;
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
+    cwd?: string;
   }
 ): Promise<string> {
   return spawn({ tool: 'gemini', task, ...options });
@@ -398,6 +409,7 @@ export async function codex(
     prd?: string;
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
+    cwd?: string;
   }
 ): Promise<string> {
   return spawn({ tool: 'codex', task, ...options });
@@ -411,6 +423,7 @@ export async function opencode(
     prd?: string;
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
+    cwd?: string;
   }
 ): Promise<string> {
   return spawn({ tool: 'opencode', task, ...options });
@@ -427,6 +440,7 @@ export async function worktree(
     prd?: string;
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
+    cwd?: string;
   }
 ): Promise<string> {
   return spawn({
@@ -435,7 +449,8 @@ export async function worktree(
     worktree: branchName,
     prd: options?.prd,
     redis: options?.redis,
-    enableHeartbeat: options?.enableHeartbeat
+    enableHeartbeat: options?.enableHeartbeat,
+    cwd: options?.cwd
   });
 }
 

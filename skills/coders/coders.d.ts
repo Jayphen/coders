@@ -27,6 +27,8 @@ export interface SpawnOptions {
   enableHeartbeat?: boolean;
   /** Custom pane ID (auto-generated if not provided) */
   paneId?: string;
+  /** Custom working directory for the session (overrides worktree path) */
+  cwd?: string;
 }
 
 export interface CoderSession {

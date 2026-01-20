@@ -108,7 +108,7 @@ function buildSpawnCommand(tool, promptFile, prompt, extraEnv = {}) {
   return cmd;
 }
 
-function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat = false, parentSessionId = null) {
+function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat = false, parentSessionId = null, customCwd = null) {
   const sessionId = `${TMUX_SESSION_PREFIX}${sessionName}`;
   const promptFile = `/tmp/coders-prompt-${Date.now()}.txt`;
   fs.writeFileSync(promptFile, prompt);
@@ -116,8 +116,11 @@ function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHea
   // Auto-detect parent session if running inside a coder session
   const effectiveParentSessionId = parentSessionId || process.env.CODERS_SESSION_ID || null;
 
+  // Determine the effective working directory: customCwd > worktreePath > process.cwd()
+  const effectiveCwd = customCwd || worktreePath || process.cwd();
+
   const cmd = buildSpawnCommand(tool, promptFile, prompt, {
-    WORKSPACE_DIR: worktreePath,
+    WORKSPACE_DIR: effectiveCwd,
     CODERS_SESSION_ID: sessionId,
     CODERS_PARENT_SESSION_ID: effectiveParentSessionId
   });
@@ -131,7 +134,7 @@ function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHea
 
   // Create new session (this opens a WINDOW)
   // Use shell command that keeps session alive after codex exits
-  const fullCmd = `tmux new-session -s "${sessionId}" -d "cd ${worktreePath}; ${cmd}; exec $SHELL"`;
+  const fullCmd = `tmux new-session -s "${sessionId}" -d "cd ${effectiveCwd}; ${cmd}; exec $SHELL"`;
 
   try {
     execSync(fullCmd);
@@ -360,12 +363,15 @@ ${colors.green}Options:${colors.reset}
   --prd <file>           Read PRD/spec file and prime the AI
   --spec <file>          Alias for --prd
   --task <description>   Task description
+  --cwd <path>           Working directory for the session (default: git root)
+  --dir <path>           Alias for --cwd
   --no-heartbeat         Disable heartbeat tracking (enabled by default)
 
 ${colors.green}Examples:${colors.reset}
   coders orchestrator
   coders spawn claude --worktree feature/auth --prd docs/prd.md
   coders spawn gemini --name my-session --task "Fix the login bug"
+  coders spawn claude --cwd ~/projects/myapp --task "Refactor the API"
   coders list
   coders attach feature-auth
   coders kill feature-auth
@@ -539,6 +545,7 @@ if (command === 'help' || !command) {
   let prdFile = null;
   let taskDesc = 'Complete the assigned task';
   let enableHeartbeat = true; // Enabled by default for dashboard tracking
+  let customCwd = null; // Optional working directory
 
   for (let i = 2; i < args.length; i++) {
     const arg = args[i];
@@ -556,6 +563,10 @@ if (command === 'help' || !command) {
       i++;
     } else if (arg === '--task' && args[i+1]) {
       taskDesc = args[i+1];
+      i++;
+    } else if ((arg === '--cwd' || arg === '--dir') && args[i+1]) {
+      // Resolve to absolute path
+      customCwd = path.isAbsolute(args[i+1]) ? args[i+1] : path.resolve(process.cwd(), args[i+1]);
       i++;
     } else if (arg === '--heartbeat' || arg === '--dashboard') {
       enableHeartbeat = true;
@@ -581,7 +592,7 @@ if (command === 'help' || !command) {
   
   // Spawn in new tmux window
   // Always use tmux for reliability
-  spawnInNewTmuxWindow(tool, worktreePath || process.cwd(), prompt, sessionName, enableHeartbeat);
+  spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat, null, customCwd);
 
   log(`\n✅ Created new window for session "${sessionName}"!`, 'green');
   // Show parent info if spawned from another session
