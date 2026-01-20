@@ -22,12 +22,45 @@ const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const HEARTBEAT_CHANNEL = 'coders:heartbeats';
 const PANE_KEY_PREFIX = 'coders:pane:';
 
-// Store active sessions
+// Store active sessions and SSE clients
 const sessions = new Map();
+const sseClients = new Set();
 
 // Redis clients
 let redisClient;
 let redisSubscriber;
+
+// Broadcast to all connected SSE clients
+function broadcast(type, data) {
+  const message = `data: ${JSON.stringify({ type, data })}\n\n`;
+  for (const client of sseClients) {
+    client.write(message);
+  }
+}
+
+// Generate the full session list with status
+function getFormattedSessionList() {
+  const tmuxSessions = getTmuxSessions();
+  const now = Date.now();
+
+  return tmuxSessions.map(tmux => {
+    const heartbeat = Array.from(sessions.values())
+      .find(s => s.sessionId === tmux.sessionId);
+
+    const lastSeen = heartbeat?.lastSeen || 0;
+    const isAlive = heartbeat && (now - lastSeen < 180000); // 3 min threshold
+
+    return {
+      sessionId: tmux.sessionId,
+      windows: tmux.windows,
+      status: isAlive ? 'alive' : 'unknown',
+      lastHeartbeat: heartbeat?.timestamp || null,
+      lastSeen: lastSeen || null,
+      paneId: heartbeat?.paneId || null,
+      lastActivity: heartbeat?.lastActivity || 'unknown'
+    };
+  });
+}
 
 // Connect to Redis
 async function connectRedis() {
@@ -52,6 +85,8 @@ async function subscribeToHeartbeats() {
         ...data,
         lastSeen: Date.now()
       });
+      // Broadcast update immediately
+      broadcast('sessions', getFormattedSessionList());
     } catch (e) {
       console.error('[Heartbeat] Parse error:', e);
     }
@@ -160,27 +195,7 @@ const server = http.createServer(async (req, res) => {
 
   // API: Get all sessions
   if (url.pathname === '/api/sessions') {
-    const tmuxSessions = getTmuxSessions();
-    const now = Date.now();
-
-    const sessionList = tmuxSessions.map(tmux => {
-      const heartbeat = Array.from(sessions.values())
-        .find(s => s.sessionId === tmux.sessionId);
-
-      const lastSeen = heartbeat?.lastSeen || 0;
-      const isAlive = heartbeat && (now - lastSeen < 180000); // 3 min threshold
-
-      return {
-        sessionId: tmux.sessionId,
-        windows: tmux.windows,
-        status: isAlive ? 'alive' : 'unknown',
-        lastHeartbeat: heartbeat?.timestamp || null,
-        lastSeen: lastSeen || null,
-        paneId: heartbeat?.paneId || null,
-        lastActivity: heartbeat?.lastActivity || 'unknown'
-      };
-    });
-
+    const sessionList = getFormattedSessionList();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(sessionList));
     return;
@@ -229,13 +244,21 @@ const server = http.createServer(async (req, res) => {
       'Connection': 'keep-alive'
     });
 
+    // Add to active clients
+    sseClients.add(res);
+
+    // Send initial data immediately
+    res.write(`data: ${JSON.stringify({ type: 'sessions', data: getFormattedSessionList() })}\n\n`);
+
+    // Keep alive / reconcile interval (every 5s)
+    // This detects new sessions that haven't sent heartbeats yet, or dead ones
     const interval = setInterval(() => {
-      const tmuxSessions = getTmuxSessions();
-      res.write(`data: ${JSON.stringify({ type: 'sessions', data: tmuxSessions })}\n\n`);
-    }, 2000);
+      res.write(`data: ${JSON.stringify({ type: 'sessions', data: getFormattedSessionList() })}\n\n`);
+    }, 5000);
 
     req.on('close', () => {
       clearInterval(interval);
+      sseClients.delete(res);
     });
     return;
   }

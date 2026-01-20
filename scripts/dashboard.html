@@ -436,16 +436,39 @@
       document.getElementById('message-input')?.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
       });
+      
+      // Start SSE
+      setupSSE();
+      // Also fetch once immediately
+      fetchSessions();
     });
 
-    // Auto-refresh
-    fetchSessions();
+    // Server-Sent Events
+    function setupSSE() {
+      const evtSource = new EventSource("/api/events");
+      
+      evtSource.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          
+          if (payload.type === 'sessions') {
+            renderSessions(payload.data);
+            updateStats(payload.data);
+          }
+        } catch (e) {
+          console.error('SSE Parse Error:', e);
+        }
+      };
+
+      evtSource.onerror = (err) => {
+        console.error("EventSource failed:", err);
+        // EventSource auto-reconnects, but if it fails permanently we might want to warn
+      };
+    }
+
+    // Auto-refresh output if active
     updateInterval = setInterval(() => {
-      fetchSessions();
       if (currentSession) {
-        // Refresh output without resetting scroll if possible, 
-        // but for now just calling viewOutput again is the simplest way to get new data.
-        // We'll modify viewOutput to be smoother later if needed.
         viewOutput(currentSession, true);
       }
     }, 3000);

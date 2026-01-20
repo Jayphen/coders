@@ -9,11 +9,13 @@ Spawn a new AI coder session.
 
 Options:
 - `tool`: 'claude' | 'gemini' | 'codex' | 'opencode'
-- `task`: Task description
-- `name`: Session name (auto-generated if omitted)
+- `task`: Task description (used to auto-generate session name)
+- `name`: Session name (auto-generated from task if omitted)
 - `worktree`: Git branch for worktree
 - `baseBranch`: Base branch for worktree (default: main)
 - `prd`: PRD/spec file path
+
+**Auto-generated Names:** Session names are automatically generated from the task description, extracting meaningful phrases to create readable identifiers (e.g., "Review the Linear project" → `coder-claude-linear-project`).
 
 ### coders.claude(task, options?)
 Quick spawn for Claude.

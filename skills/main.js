@@ -78,8 +78,9 @@ function buildSpawnCommand(tool, promptFile, prompt, extraEnv = {}) {
   const escapedPrompt = prompt.replace(/'/g, "'\\''");
 
   if (tool === 'claude' || tool === 'claude-code') {
-    // Claude stays interactive by default with -f
-    cmd = `CLAUDE=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} claude --dangerously-spawn-permission -f "${promptFile}"`;
+    // Claude stays interactive by default - pass prompt via stdin
+    // Add --dangerously-skip-permissions to auto-approve file operations
+    cmd = `CLAUDE=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} claude --dangerously-skip-permissions < "${promptFile}"`;
   } else if (tool === 'gemini') {
     // Gemini: use --prompt-interactive with the prompt text to execute and stay interactive
     cmd = `GEMINI=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} gemini --yolo --prompt-interactive '${escapedPrompt}'`;
@@ -207,6 +208,25 @@ function killSession(sessionName) {
   }
 }
 
+function generateSessionName(tool, taskDesc) {
+  // Extract first meaningful phrase from task description
+  const match = taskDesc.match(/(?:Review|Build|Fix|Create|Update|Implement|Analyze|Test|Debug)\s+(?:the\s+)?([^.,:;]+)/i);
+
+  if (match && match[1]) {
+    // Create slug from the extracted phrase
+    const slug = match[1]
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '')
+      .substring(0, 40); // Limit length
+
+    return `${tool}-${slug}`;
+  }
+
+  // Fallback to timestamp if no match
+  return `${tool}-${Date.now()}`;
+}
+
 function usage() {
   console.log(`
 ${colors.blue}🤖 Coder Spawner - Spawn AI coding assistants in NEW tmux windows${colors.reset}
@@ -219,7 +239,7 @@ ${colors.green}Usage:${colors.reset}
   coders help
 
 ${colors.green}Tools:${colors.reset}
-  claude    - Anthropic Claude Code CLI (with --dangerously-spawn-permission)
+  claude    - Anthropic Claude Code CLI
   gemini    - Google Gemini CLI  
   codex     - OpenAI Codex CLI
 
@@ -241,8 +261,7 @@ ${colors.green}Examples:${colors.reset}
 ${colors.green}How it works:${colors.reset}
   1. Creates NEW tmux window (visible!)
   2. Runs Claude/Gemini/Codex in it
-  3. Claude has --dangerously-spawn-permission
-  4. Attach with: coders attach <name>
+  3. Attach with: coders attach <name>
 `);
 }
 
@@ -270,13 +289,13 @@ if (command === 'help' || !command) {
   }
 } else if (command === 'spawn') {
   const tool = args[1];
-  
+
   if (!tool) {
     log('Usage: coders spawn <claude|gemini|codex> [options]', 'red');
     process.exit(1);
   }
-  
-  let sessionName = `${tool}-${Date.now()}`;
+
+  let sessionName = null; // Will be generated from task if not provided
   let worktreeBranch = null;
   let baseBranch = 'main';
   let prdFile = null;
@@ -303,6 +322,11 @@ if (command === 'help' || !command) {
     } else if (arg === '--heartbeat' || arg === '--dashboard') {
       enableHeartbeat = true;
     }
+  }
+
+  // Generate session name from task description if not explicitly provided
+  if (!sessionName) {
+    sessionName = generateSessionName(tool, taskDesc);
   }
   
   // Create worktree if requested

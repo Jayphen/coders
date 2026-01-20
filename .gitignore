@@ -3,3 +3,20 @@ dist
 .env
 *.log
 .DS_Store
+
+# Markdown files except README.md
+*.md
+!README.md
+
+# Project planning/breakdown files (not part of plugin distribution)
+*-breakdown.md
+project-breakdowns-*.md
+time-estimates-*.md
+
+# Utility/test scripts (not part of plugin distribution)
+scripts/check-review-status.sh
+scripts/incorporate-feedback-and-create-issues.sh
+scripts/monitor-and-trigger.sh
+
+# Runtime files
+nohup.out
