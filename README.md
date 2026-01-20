@@ -6,15 +6,17 @@ Spawn AI coding assistants (Claude, Gemini, Codex, OpenCode) in isolated tmux se
 
 ### 1. Claude Code Plugin (Recommended)
 
-Install as a Claude Code plugin:
+Install as a Claude Code plugin using the marketplace:
 
 ```bash
-cd ~/code
-git clone https://github.com/Jayphen/coders.git
-cd coders
+# Add the marketplace
+claude plugin marketplace add https://github.com/Jayphen/coders.git
+
+# Install the plugin
+claude plugin install coders@coders
 ```
 
-Claude Code will auto-discover the plugin from `.claude-plugin/plugin.json`. No npm install needed - TypeScript files are loaded directly!
+No npm install needed - TypeScript files are loaded directly!
 
 **Available slash commands:**
 ```bash
