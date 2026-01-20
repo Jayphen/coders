@@ -82,14 +82,36 @@ function getFormattedSessionList() {
       paneId: heartbeat?.paneId || null,
       lastActivity: heartbeat?.lastActivity || 'unknown',
       isOrchestrator: isOrchestrator,
-      cwd: getSessionCwd(tmux.sessionId)
+      cwd: getSessionCwd(tmux.sessionId),
+      parentSessionId: heartbeat?.parentSessionId || null
     };
   });
 
-  // Sort sessions: orchestrator first, then by sessionId
+  // Build child session lookup map
+  const childrenMap = new Map();
+  sessionList.forEach(session => {
+    if (session.parentSessionId) {
+      if (!childrenMap.has(session.parentSessionId)) {
+        childrenMap.set(session.parentSessionId, []);
+      }
+      childrenMap.get(session.parentSessionId).push(session.sessionId);
+    }
+  });
+
+  // Add children info to each session
+  sessionList.forEach(session => {
+    session.children = childrenMap.get(session.sessionId) || [];
+  });
+
+  // Sort sessions: orchestrator first, then root sessions (no parent), then by sessionId
   return sessionList.sort((a, b) => {
     if (a.isOrchestrator) return -1;
     if (b.isOrchestrator) return 1;
+    // Root sessions (no parent) come before child sessions
+    const aIsRoot = !a.parentSessionId;
+    const bIsRoot = !b.parentSessionId;
+    if (aIsRoot && !bIsRoot) return -1;
+    if (!aIsRoot && bIsRoot) return 1;
     return a.sessionId.localeCompare(b.sessionId);
   });
 }

@@ -86,27 +86,41 @@ function buildSpawnCommand(tool, promptFile, prompt, extraEnv = {}) {
   // Escape single quotes in prompt for shell safety
   const escapedPrompt = prompt.replace(/'/g, "'\\''");
 
+  // Build environment variable string
+  const envStr = Object.entries(extraEnv)
+    .filter(([_, v]) => v !== undefined && v !== null)
+    .map(([k, v]) => `${k}="${v}"`)
+    .join(' ');
+  const envPrefix = envStr ? envStr + ' ' : '';
+
   if (tool === 'claude' || tool === 'claude-code') {
     // Claude stays interactive by default - pass prompt via stdin
     // Add --dangerously-skip-permissions to auto-approve file operations
-    cmd = `CLAUDE=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} claude --dangerously-skip-permissions < "${promptFile}"`;
+    cmd = `${envPrefix}claude --dangerously-skip-permissions < "${promptFile}"`;
   } else if (tool === 'gemini') {
     // Gemini: use --prompt-interactive with the prompt text to execute and stay interactive
-    cmd = `GEMINI=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} gemini --yolo --prompt-interactive '${escapedPrompt}'`;
+    cmd = `${envPrefix}gemini --yolo --prompt-interactive '${escapedPrompt}'`;
   } else if (tool === 'codex' || tool === 'openai-codex') {
     // Codex: provide initial prompt as positional argument, stays interactive by default
-    cmd = `CODEX=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} codex --dangerously-bypass-approvals-and-sandbox '${escapedPrompt}'`;
+    cmd = `${envPrefix}codex --dangerously-bypass-approvals-and-sandbox '${escapedPrompt}'`;
   }
 
   return cmd;
 }
 
-function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat = false) {
+function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat = false, parentSessionId = null) {
   const sessionId = `${TMUX_SESSION_PREFIX}${sessionName}`;
   const promptFile = `/tmp/coders-prompt-${Date.now()}.txt`;
   fs.writeFileSync(promptFile, prompt);
 
-  const cmd = buildSpawnCommand(tool, promptFile, prompt, { WORKSPACE_DIR: worktreePath });
+  // Auto-detect parent session if running inside a coder session
+  const effectiveParentSessionId = parentSessionId || process.env.CODERS_SESSION_ID || null;
+
+  const cmd = buildSpawnCommand(tool, promptFile, prompt, {
+    WORKSPACE_DIR: worktreePath,
+    CODERS_SESSION_ID: sessionId,
+    CODERS_PARENT_SESSION_ID: effectiveParentSessionId
+  });
 
   log(`Creating NEW tmux window for: ${sessionId}`, 'blue');
 
@@ -570,6 +584,11 @@ if (command === 'help' || !command) {
   spawnInNewTmuxWindow(tool, worktreePath || process.cwd(), prompt, sessionName, enableHeartbeat);
 
   log(`\n✅ Created new window for session "${sessionName}"!`, 'green');
+  // Show parent info if spawned from another session
+  const effectiveParentSessionId = process.env.CODERS_SESSION_ID || null;
+  if (effectiveParentSessionId) {
+    log(`👪 Parent session: ${effectiveParentSessionId}`, 'blue');
+  }
   log(`💡 Attach: coders attach ${sessionName}`, 'yellow');
   if (enableHeartbeat) {
     log(`💡 View dashboard: coders dashboard`, 'yellow');

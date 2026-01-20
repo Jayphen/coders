@@ -14,6 +14,7 @@ const INTERVAL_MS = 30000; // 30 seconds
 
 const sessionId = process.env.SESSION_ID || process.argv[2];
 const paneId = process.env.PANE_ID || `pane-${Date.now()}`;
+const parentSessionId = process.env.CODERS_PARENT_SESSION_ID || null;
 
 if (!sessionId) {
   console.error('Usage: heartbeat.js <session-id>');
@@ -44,7 +45,8 @@ async function publishHeartbeat() {
     sessionId,
     timestamp: Date.now(),
     status: 'alive',
-    lastActivity: 'working'
+    lastActivity: 'working',
+    parentSessionId
   };
 
   try {

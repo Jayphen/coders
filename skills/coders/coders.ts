@@ -58,6 +58,7 @@ export interface SpawnOptions {
   redis?: RedisConfig;
   enableHeartbeat?: boolean;
   paneId?: string;
+  parentSessionId?: string;
 }
 
 export interface CoderSession {
@@ -142,19 +143,20 @@ function createWorktree(branchName: string, baseBranch: string = 'main'): string
  * Build the spawn command for a tool with optional pane ID injection
  */
 function buildCommand(
-  tool: string, 
-  promptFile: string, 
+  tool: string,
+  promptFile: string,
   worktreePath?: string,
   paneId?: string,
   redisConfig?: RedisConfig,
-  sessionId?: string
+  sessionId?: string,
+  parentSessionId?: string
 ): string {
   const envVars: string[] = [];
-  
+
   if (worktreePath) {
     envVars.push(`WORKSPACE_DIR="${worktreePath}"`);
   }
-  
+
   if (paneId) {
     envVars.push(`CODERS_PANE_ID="${paneId}"`);
   }
@@ -162,11 +164,15 @@ function buildCommand(
   if (sessionId) {
     envVars.push(`CODERS_SESSION_ID="${sessionId}"`);
   }
-  
+
+  if (parentSessionId) {
+    envVars.push(`CODERS_PARENT_SESSION_ID="${parentSessionId}"`);
+  }
+
   if (redisConfig?.url) {
     envVars.push(`REDIS_URL="${redisConfig.url}"`);
   }
-  
+
   const env = envVars.length > 0 ? envVars.join(' ') + ' ' : '';
   
   if (tool === 'claude' || tool === 'claude-code') {
@@ -241,8 +247,12 @@ export async function spawn(options: SpawnOptions): Promise<string> {
     interactive = true,
     redis: redisConfig,
     enableHeartbeat = !!redisConfig?.url,
-    paneId: providedPaneId
+    paneId: providedPaneId,
+    parentSessionId: providedParentSessionId
   } = options;
+
+  // Auto-detect parent session if running inside a coder session
+  const parentSessionId = providedParentSessionId || process.env.CODERS_SESSION_ID || undefined;
   
   if (!task) {
     return '❌ Task description is required. Pass `task: "..."` or use interactive mode.';
@@ -272,7 +282,7 @@ export async function spawn(options: SpawnOptions): Promise<string> {
   fs.writeFileSync(promptFile, prompt);
   
   // Build command with environment variables
-  const cmd = buildCommand(tool, promptFile, worktreePath, paneId, redisConfig, sessionId);
+  const cmd = buildCommand(tool, promptFile, worktreePath, paneId, redisConfig, sessionId, parentSessionId);
 
   try {
     // Clean up existing session if any
@@ -295,6 +305,7 @@ export async function spawn(options: SpawnOptions): Promise<string> {
 
 **Session:** ${sessionId}
 **Pane ID:** ${paneId}
+**Parent:** ${parentSessionId || 'none (root session)'}
 **Worktree:** ${worktreePath || 'main repo'}
 **Task:** ${task}
 **PRD:** ${prd || 'none'}

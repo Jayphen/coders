@@ -30,6 +30,7 @@ export interface PaneInfo {
   task: string;
   pid: number;
   createdAt: number;
+  parentSessionId?: string;
 }
 
 export interface HeartbeatData {
@@ -38,6 +39,7 @@ export interface HeartbeatData {
   timestamp: number;
   status: 'alive' | 'processing' | 'idle';
   lastActivity: string;
+  parentSessionId?: string;
 }
 
 export interface SnapshotData {
@@ -175,11 +177,12 @@ export class RedisManager {
       sessionId: this.getSessionId(),
       timestamp: Date.now(),
       status,
-      lastActivity
+      lastActivity,
+      parentSessionId: this.getParentSessionId()
     };
 
     await this.client.publish(HEARTBEAT_CHANNEL, JSON.stringify(data));
-    
+
     // Also set expiration-based key for dead-letter queue
     await this.client.set(`${PANE_ID_KEY_PREFIX}${this.paneId}`, JSON.stringify(data), {
       EX: 150 // 2.5 min TTL (longer than dead-letter timeout)
@@ -216,6 +219,13 @@ export class RedisManager {
    */
   private getSessionId(): string {
     return process.env.CODERS_SESSION_ID || 'coder-unknown';
+  }
+
+  /**
+   * Get the parent session ID (if spawned from another coder session)
+   */
+  private getParentSessionId(): string | undefined {
+    return process.env.CODERS_PARENT_SESSION_ID || undefined;
   }
 
   /**
