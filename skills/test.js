@@ -5,8 +5,9 @@
  * Run basic tests without needing vitest
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { generateSessionName } from './session-name.js';
 
 let passed = 0;
 let failed = 0;
@@ -129,6 +130,12 @@ test('throws on unknown tool', () => {
     expect(e.message).toContain('Unknown tool');
   }
   if (!threw) throw new Error('Should have thrown');
+});
+
+console.log('\ngenerateSessionName:');
+test('creates readable slug from task description', () => {
+  const name = generateSessionName('gemini', 'Investigate login timeout handling');
+  expect(name).toContain('gemini-login-timeout-handling');
 });
 
 console.log('\nFile System:');

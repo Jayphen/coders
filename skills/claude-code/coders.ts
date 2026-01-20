@@ -42,6 +42,7 @@ import {
   HEARTBEAT_CHANNEL,
   DEAD_LETTER_KEY
 } from './redis';
+import { generateSessionName } from '../session-name.js';
 
 const WORKTREE_BASE = '../worktrees';
 const SESSION_PREFIX = 'coder-';
@@ -149,7 +150,8 @@ function buildCommand(
   promptFile: string, 
   worktreePath?: string,
   paneId?: string,
-  redisConfig?: RedisConfig
+  redisConfig?: RedisConfig,
+  sessionId?: string
 ): string {
   const envVars: string[] = [];
   
@@ -159,7 +161,10 @@ function buildCommand(
   
   if (paneId) {
     envVars.push(`CODERS_PANE_ID="${paneId}"`);
-    envVars.push(`CODERS_SESSION_ID="${SESSION_PREFIX}${tool}-${Date.now()}"`);
+  }
+
+  if (sessionId) {
+    envVars.push(`CODERS_SESSION_ID="${sessionId}"`);
   }
   
   if (redisConfig?.url) {
@@ -264,7 +269,7 @@ export async function spawn(options: SpawnOptions): Promise<string> {
     return '❌ Task description is required. Pass `task: "..."` or use interactive mode.';
   }
   
-  const sessionName = name || `${tool}-${Date.now()}`;
+  const sessionName = name || generateSessionName(tool, task);
   const sessionId = `${SESSION_PREFIX}${sessionName}`;
   const paneId = providedPaneId || getPaneId();
   
@@ -288,7 +293,7 @@ export async function spawn(options: SpawnOptions): Promise<string> {
   fs.writeFileSync(promptFile, prompt);
   
   // Build command with environment variables
-  const cmd = buildCommand(tool, promptFile, worktreePath, paneId, redisConfig);
+  const cmd = buildCommand(tool, promptFile, worktreePath, paneId, redisConfig, sessionId);
   
   // Start dead-letter listener if enabled
   let deadLetterListener: DeadLetterListener | null = null;

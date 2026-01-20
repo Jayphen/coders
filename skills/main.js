@@ -4,6 +4,14 @@ import { execSync, spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { generateSessionName } from './session-name.js';
+import {
+  loadOrchestratorState,
+  markOrchestratorStarted,
+  markOrchestratorStopped,
+  getOrchestratorSessionId,
+  isOrchestratorSession
+} from './orchestrator.js';
 
 const TMUX_SESSION_PREFIX = 'coder-';
 
@@ -209,23 +217,87 @@ function killSession(sessionName) {
   }
 }
 
-function generateSessionName(tool, taskDesc) {
-  // Extract first meaningful phrase from task description
-  const match = taskDesc.match(/(?:Review|Build|Fix|Create|Update|Implement|Analyze|Test|Debug)\s+(?:the\s+)?([^.,:;]+)/i);
+async function startOrAttachOrchestrator() {
+  const sessionId = getOrchestratorSessionId();
 
-  if (match && match[1]) {
-    // Create slug from the extracted phrase
-    const slug = match[1]
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '')
-      .substring(0, 40); // Limit length
+  // Check if orchestrator session already exists
+  try {
+    const sessions = execSync('tmux list-sessions 2>/dev/null || echo ""', { encoding: 'utf8' });
+    const exists = sessions.includes(sessionId);
 
-    return `${tool}-${slug}`;
+    if (exists) {
+      log(`Orchestrator session already exists, attaching...`, 'blue');
+      try {
+        execSync(`tmux attach-session -t ${sessionId}`, { stdio: 'inherit' });
+      } catch (e) {
+        log(`Failed to attach: ${e.message}`, 'red');
+      }
+      return;
+    }
+  } catch (e) {
+    // tmux might not be available
   }
 
-  // Fallback to timestamp if no match
-  return `${tool}-${Date.now()}`;
+  // Create new orchestrator session
+  log(`Creating orchestrator session: ${sessionId}`, 'blue');
+
+  const orchestratorPrompt = `
+╔════════════════════════════════════════════════════════════════════════════╗
+║                      CODER ORCHESTRATOR SESSION                            ║
+║                                                                            ║
+║  This is a special persistent session for coordinating other coder        ║
+║  sessions. You can use the following commands:                            ║
+║                                                                            ║
+║  - coders spawn <tool> [options]  : Spawn a new coder session             ║
+║  - coders list                    : List all active sessions               ║
+║  - coders attach <session>        : Attach to a session                    ║
+║  - coders kill <session>          : Kill a session                         ║
+║  - coders dashboard               : Open the dashboard                     ║
+║                                                                            ║
+║  Use Claude Code to orchestrate your AI coding sessions!                  ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+Welcome to the Orchestrator session. You have full permissions to spawn and manage
+other coder sessions. Start by spawning your first session or listing existing ones.
+`;
+
+  const promptFile = `/tmp/coders-orchestrator-prompt.txt`;
+  fs.writeFileSync(promptFile, orchestratorPrompt);
+
+  // Spawn orchestrator with Claude Code
+  const cmd = `claude --dangerously-skip-permissions < "${promptFile}"`;
+  const fullCmd = `tmux new-session -s "${sessionId}" -d "cd ${process.cwd()}; ${cmd}; exec $SHELL"`;
+
+  try {
+    execSync(fullCmd);
+    await markOrchestratorStarted();
+    log(`✅ Created orchestrator session: ${sessionId}`, 'green');
+    log(`💡 Attach: coders orchestrator`, 'yellow');
+    log(`💡 Or: tmux attach -t ${sessionId}`, 'yellow');
+
+    // Start heartbeat for orchestrator
+    try {
+      const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+      const heartbeatScript = path.join(scriptDir, '../scripts/heartbeat.js');
+      execSync(`SESSION_ID="${sessionId}" nohup node ${heartbeatScript} "${sessionId}" > /dev/null 2>&1 &`);
+      log(`💓 Heartbeat enabled for orchestrator`, 'green');
+    } catch (e) {
+      log(`⚠️  Heartbeat failed to start: ${e.message}`, 'yellow');
+    }
+
+    // Auto-attach to the new session only if running in a TTY
+    if (process.stdout.isTTY) {
+      setTimeout(() => {
+        try {
+          execSync(`tmux attach-session -t ${sessionId}`, { stdio: 'inherit' });
+        } catch (e) {
+          log(`Failed to attach: ${e.message}`, 'red');
+        }
+      }, 500);
+    }
+  } catch (e) {
+    log(`❌ Failed to create orchestrator: ${e.message}`, 'red');
+  }
 }
 
 function usage() {
@@ -234,6 +306,7 @@ ${colors.blue}🤖 Coder Spawner - Spawn AI coding assistants in NEW tmux window
 
 ${colors.green}Usage:${colors.reset}
   coders spawn <tool> [options]
+  coders orchestrator
   coders list
   coders attach <session>
   coders kill <session>
@@ -242,8 +315,12 @@ ${colors.green}Usage:${colors.reset}
 
 ${colors.green}Tools:${colors.reset}
   claude    - Anthropic Claude Code CLI
-  gemini    - Google Gemini CLI  
+  gemini    - Google Gemini CLI
   codex     - OpenAI Codex CLI
+
+${colors.green}Orchestrator:${colors.reset}
+  coders orchestrator    - Start/attach to the orchestrator session
+                          (persistent session for coordinating other coders)
 
 ${colors.green}Options:${colors.reset}
   --name <name>          Session name (auto-generated if omitted)
@@ -255,6 +332,7 @@ ${colors.green}Options:${colors.reset}
   --no-heartbeat         Disable heartbeat tracking (enabled by default)
 
 ${colors.green}Examples:${colors.reset}
+  coders orchestrator
   coders spawn claude --worktree feature/auth --prd docs/prd.md
   coders spawn gemini --name my-session --task "Fix the login bug"
   coders list
@@ -344,6 +422,10 @@ const command = args[0];
 
 if (command === 'help' || !command) {
   usage();
+} else if (command === 'orchestrator') {
+  startOrAttachOrchestrator().catch((err) => {
+    log(`❌ Failed to start orchestrator: ${err.message}`, 'red');
+  });
 } else if (command === 'list') {
   listSessions();
 } else if (command === 'attach') {
