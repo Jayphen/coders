@@ -4,12 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Coders Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/ansi_up@5.1.0/ansi_up.min.js"></script>
   <style>
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
+
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
@@ -372,6 +374,8 @@
       return `${hours}h ago`;
     }
 
+    const ansiUp = new AnsiUp();
+
     async function viewOutput(sessionId, isRefresh = false) {
       if (!isRefresh) {
         currentSession = sessionId;
@@ -386,7 +390,8 @@
       const content = document.getElementById('output-content');
       const isAtBottom = content.scrollHeight - content.scrollTop === content.clientHeight;
 
-      document.getElementById('output-content').textContent = data.output;
+      const html = ansiUp.ansi_to_html(data.output);
+      content.innerHTML = html;
 
       // Auto-scroll to bottom only if we were already there or it's a fresh open
       if (!isRefresh || isAtBottom) {

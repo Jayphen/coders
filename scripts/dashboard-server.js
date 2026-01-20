@@ -113,7 +113,7 @@ function getTmuxSessions() {
 function getSessionOutput(sessionId, lines = 30) {
   try {
     const output = execSync(
-      `tmux capture-pane -t ${sessionId} -p -S -${lines} 2>/dev/null || echo "Session not found"`,
+      `tmux capture-pane -t ${sessionId} -p -e -S -${lines} 2>/dev/null || echo "Session not found"`,
       { encoding: 'utf8' }
     );
     return output;
@@ -257,4 +257,21 @@ async function start() {
   });
 }
 
-start().catch(console.error);
+// Handle shutdown gracefully
+process.on('SIGINT', async () => {
+  console.log('\n[Dashboard] Shutting down...');
+  process.exit(0);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[Dashboard] Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Dashboard] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+start().catch(err => {
+  console.error('[Dashboard] Start failed:', err);
+  process.exit(1);
+});
