@@ -87,6 +87,8 @@ coders spawn claude --task "Hello world"
 - **Redis Heartbeat** (optional): Auto-respawn dead panes, pub/sub for inter-agent communication
 - **Tmux Resurrect**: Snapshot/restore entire swarm
 
+<img width="1505" height="1331" alt="Dashboard" src="https://github.com/user-attachments/assets/a9f46996-670c-4e13-975c-d8e381aaa0ab" />
+
 ### Communicating with Spawned Sessions
 
 All sessions run in **interactive mode** and persist until you explicitly kill them.
