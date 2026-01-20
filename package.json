@@ -30,10 +30,10 @@
     "url": "https://github.com/Jayphen/coders/issues"
   },
   "homepage": "https://github.com/Jayphen/coders#readme",
+  "dependencies": {
+    "redis": "^5.0.0"
+  },
   "devDependencies": {
     "@types/node": "^20.0.0"
-  },
-  "optionalDependencies": {
-    "redis": "^5.0.0"
   }
 }
