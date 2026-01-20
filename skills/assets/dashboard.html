@@ -65,6 +65,22 @@
       border-color: #58a6ff;
     }
 
+    .session-card.pulse {
+      animation: pulse-glow 1.2s ease-out;
+    }
+
+    @keyframes pulse-glow {
+      0% {
+        box-shadow: 0 0 0 rgba(88, 166, 255, 0);
+      }
+      50% {
+        box-shadow: 0 0 14px rgba(88, 166, 255, 0.35);
+      }
+      100% {
+        box-shadow: 0 0 0 rgba(88, 166, 255, 0);
+      }
+    }
+
     .session-header {
       display: flex;
       justify-content: space-between;
@@ -110,6 +126,41 @@
 
     .session-info div {
       margin-bottom: 5px;
+    }
+
+    .typing-indicator {
+      display: inline-flex;
+      gap: 4px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    .typing-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #58a6ff;
+      opacity: 0.5;
+      animation: typing-bounce 1s infinite ease-in-out;
+    }
+
+    .typing-dot:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .typing-dot:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+
+    @keyframes typing-bounce {
+      0%, 80%, 100% {
+        transform: translateY(0);
+        opacity: 0.4;
+      }
+      40% {
+        transform: translateY(-3px);
+        opacity: 0.9;
+      }
     }
 
     .heartbeat-indicator {
@@ -494,6 +545,7 @@
   <script>
     let currentSession = null;
     let updateInterval = null;
+    const sessionSignatures = new Map();
 
     async function fetchSessions() {
       try {
@@ -564,10 +616,30 @@
         const responseSince = responseAgeMs !== null
           ? formatTimeSince(responseAgeMs)
           : 'Never';
+        const isTyping = responseAgeMs !== null && responseAgeMs <= 5000;
         const isStale = responseAgeMs !== null && responseAgeMs > 5 * 60 * 1000;
+        const typingIndicator = isTyping
+          ? `<span class="typing-indicator" title="Recent response">
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+            </span>`
+          : '';
+
+        const signature = JSON.stringify({
+          status: session.status,
+          lastSeen: session.lastSeen,
+          lastResponseAt: session.lastResponseAt,
+          windows: session.windows,
+          lastActivity: session.lastActivity,
+          paneId: session.paneId
+        });
+        const previousSignature = sessionSignatures.get(session.sessionId);
+        const isUpdated = previousSignature && previousSignature !== signature;
+        sessionSignatures.set(session.sessionId, signature);
 
         return `
-          <div class="session-card ${isStale ? 'stale' : ''}">
+          <div class="session-card ${isStale ? 'stale' : ''} ${isUpdated ? 'pulse' : ''}">
             <div class="session-header">
               <div class="session-name">${session.sessionId}</div>
               <div class="status ${session.status}">${session.status}</div>
@@ -577,7 +649,7 @@
                 <span class="heartbeat-indicator ${session.status}"></span>
                 Last seen: ${timeSince}
               </div>
-              <div>Last response: ${responseSince}</div>
+              <div>Last response: ${responseSince} ${typingIndicator}</div>
               <div>Windows: ${session.windows}</div>
               <div>Activity: ${session.lastActivity}</div>
               ${session.paneId ? `<div>Pane ID: ${session.paneId}</div>` : ''}
@@ -590,6 +662,13 @@
           </div>
         `;
       }).join('');
+
+      const activeIds = new Set(regularSessions.map(s => s.sessionId));
+      for (const sessionId of sessionSignatures.keys()) {
+        if (!activeIds.has(sessionId)) {
+          sessionSignatures.delete(sessionId);
+        }
+      }
     }
 
     function formatTimeSince(ms) {
