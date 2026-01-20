@@ -36,3 +36,29 @@ Spawn Claude, Gemini, Codex, or OpenCode in an isolated tmux window with optiona
 ```
 /coders:spawn claude --task "Build auth" --redis redis://localhost:6379 --enable-heartbeat
 ```
+
+## Communicating with Spawned Sessions
+
+All spawned sessions run in **interactive mode** and persist until you kill them.
+
+### Attach to session (recommended)
+```bash
+tmux attach -t coder-SESSION_ID
+# Press Ctrl+B then D to detach
+```
+
+### Send messages remotely
+```bash
+# Using helper script
+./scripts/send-to-session.sh coder-SESSION_ID "your message"
+
+# Manually (two-step required for TUI CLIs)
+tmux send-keys -t coder-SESSION_ID "your message"
+sleep 0.5
+tmux send-keys -t coder-SESSION_ID C-m
+```
+
+### Check session output
+```bash
+tmux capture-pane -t coder-SESSION_ID -p | tail -20
+```

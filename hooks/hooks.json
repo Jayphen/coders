@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE '^tmux (new-session|send-keys|list-sessions|kill-session|attach)'; then echo '{\"decision\": \"allow\"}'; else echo '{\"decision\": \"ask\"}'; fi"
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE 'tmux (new-session|send-keys|list-sessions|kill-session|attach|capture-pane)'; then echo '{\"decision\": \"allow\"}'; else echo '{\"decision\": \"ask\"}'; fi"
           }
         ]
       }

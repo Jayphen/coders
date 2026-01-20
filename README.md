@@ -69,11 +69,39 @@ coders spawn claude --task "Hello world"
 
 ## Features
 
+- **Interactive Sessions**: All spawned AIs stay in interactive mode for continuous communication
 - **Git Worktrees**: Creates isolated branches for each task
 - **PRD Priming**: Feeds context to the AI before it starts
 - **Tmux Sessions**: Runs in separate tmux windows
 - **Redis Heartbeat** (optional): Auto-respawn dead panes, pub/sub for inter-agent communication
 - **Tmux Resurrect**: Snapshot/restore entire swarm
+
+### Communicating with Spawned Sessions
+
+All sessions run in **interactive mode** and persist until you explicitly kill them.
+
+**Attach directly (recommended):**
+```bash
+tmux attach -t coder-SESSION_ID
+# Press Ctrl+B then D to detach without killing
+```
+
+**Send messages remotely:**
+```bash
+# Using helper script
+./scripts/send-to-session.sh coder-SESSION_ID "your message"
+
+# Check response
+tmux capture-pane -t coder-SESSION_ID -p | tail -20
+```
+
+**Why two-step for remote messaging:**
+TUI applications (Gemini, Codex) require text and Enter to be sent separately:
+```bash
+tmux send-keys -t SESSION "message"
+sleep 0.5  # Let TUI process input
+tmux send-keys -t SESSION C-m  # Submit
+```
 
 ### Redis Heartbeat & Auto-Respawn (Optional)
 

@@ -72,37 +72,39 @@ function generateInitialPrompt(tool, taskDescription, contextFiles = []) {
   return prompt;
 }
 
-function buildSpawnCommand(tool, promptFile, extraEnv = {}) {
+function buildSpawnCommand(tool, promptFile, prompt, extraEnv = {}) {
   let cmd;
+  // Escape single quotes in prompt for shell safety
+  const escapedPrompt = prompt.replace(/'/g, "'\\''");
 
   if (tool === 'claude' || tool === 'claude-code') {
+    // Claude stays interactive by default with -f
     cmd = `CLAUDE=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} claude --dangerously-spawn-permission -f "${promptFile}"`;
   } else if (tool === 'gemini') {
-    // Gemini uses positional arguments for prompt, with --yolo for auto-approval
-    cmd = `GEMINI=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} gemini --yolo '$(cat ${promptFile})'`;
+    // Gemini: use --prompt-interactive with the prompt text to execute and stay interactive
+    cmd = `GEMINI=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} gemini --yolo --prompt-interactive '${escapedPrompt}'`;
   } else if (tool === 'codex' || tool === 'openai-codex') {
-    // Codex doesn't use -f, it takes prompt as an argument
-    // Use single quotes around the command substitution to avoid quote conflicts
-    cmd = `CODEX=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} codex --dangerously-bypass-approvals-and-sandbox '$(cat ${promptFile})'`;
+    // Codex: provide initial prompt as positional argument, stays interactive by default
+    cmd = `CODEX=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} codex --dangerously-bypass-approvals-and-sandbox '${escapedPrompt}'`;
   }
 
   return cmd;
 }
 
-function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName) {
+function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat = false) {
   const sessionId = `${TMUX_SESSION_PREFIX}${sessionName}`;
   const promptFile = `/tmp/coders-prompt-${Date.now()}.txt`;
   fs.writeFileSync(promptFile, prompt);
-  
-  const cmd = buildSpawnCommand(tool, promptFile, { WORKSPACE_DIR: worktreePath });
-  
+
+  const cmd = buildSpawnCommand(tool, promptFile, prompt, { WORKSPACE_DIR: worktreePath });
+
   log(`Creating NEW tmux window for: ${sessionId}`, 'blue');
-  
+
   // Kill existing session if it exists
   try {
     execSync(`tmux kill-session -t ${sessionId} 2>/dev/null`);
   } catch {}
-  
+
   // Create new session (this opens a WINDOW)
   // Use shell command that keeps session alive after codex exits
   const fullCmd = `tmux new-session -s "${sessionId}" -d "cd ${worktreePath}; ${cmd}; exec $SHELL"`;
@@ -110,6 +112,19 @@ function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName) {
   try {
     execSync(fullCmd);
     log(`✅ Created tmux window: ${sessionId}`, 'green');
+
+    // Start heartbeat in background if enabled
+    if (enableHeartbeat) {
+      try {
+        const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+        const heartbeatScript = path.join(scriptDir, '../scripts/heartbeat.js');
+        execSync(`SESSION_ID="${sessionId}" nohup node ${heartbeatScript} "${sessionId}" > /dev/null 2>&1 &`);
+        log(`💓 Heartbeat enabled (dashboard will show status)`, 'green');
+      } catch (e) {
+        log(`⚠️  Heartbeat failed to start: ${e.message}`, 'yellow');
+      }
+    }
+
     log(`💡 Attach: coders attach ${sessionName}`, 'yellow');
     log(`💡 Or: tmux attach -t ${sessionId}`, 'yellow');
   } catch (e) {
@@ -266,7 +281,8 @@ if (command === 'help' || !command) {
   let baseBranch = 'main';
   let prdFile = null;
   let taskDesc = 'Complete the assigned task';
-  
+  let enableHeartbeat = false;
+
   for (let i = 2; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--name' && args[i+1]) {
@@ -284,6 +300,8 @@ if (command === 'help' || !command) {
     } else if (arg === '--task' && args[i+1]) {
       taskDesc = args[i+1];
       i++;
+    } else if (arg === '--heartbeat' || arg === '--dashboard') {
+      enableHeartbeat = true;
     }
   }
   
@@ -299,10 +317,13 @@ if (command === 'help' || !command) {
   
   // Spawn in new tmux window
   // Always use tmux for reliability
-  spawnInNewTmuxWindow(tool, worktreePath || process.cwd(), prompt, sessionName);
-  
+  spawnInNewTmuxWindow(tool, worktreePath || process.cwd(), prompt, sessionName, enableHeartbeat);
+
   log(`\n✅ Created new window for session "${sessionName}"!`, 'green');
   log(`💡 Attach: coders attach ${sessionName}`, 'yellow');
+  if (enableHeartbeat) {
+    log(`💡 View dashboard: http://localhost:3030`, 'yellow');
+  }
 } else {
   log(`Unknown command: ${command}`, 'red');
   usage();

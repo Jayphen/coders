@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coders Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: #58a6ff;
+      margin-bottom: 10px;
+      font-size: 32px;
+    }
+
+    .subtitle {
+      color: #8b949e;
+      margin-bottom: 30px;
+    }
+
+    .sessions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .session-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 20px;
+      transition: border-color 0.2s;
+    }
+
+    .session-card:hover {
+      border-color: #58a6ff;
+    }
+
+    .session-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .session-name {
+      font-size: 18px;
+      font-weight: 600;
+      color: #c9d1d9;
+      font-family: 'Monaco', 'Courier New', monospace;
+    }
+
+    .status {
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status.alive {
+      background: #238636;
+      color: #fff;
+    }
+
+    .status.unknown {
+      background: #6e7681;
+      color: #fff;
+    }
+
+    .status.dead {
+      background: #da3633;
+      color: #fff;
+    }
+
+    .session-info {
+      margin-bottom: 15px;
+      font-size: 14px;
+      color: #8b949e;
+    }
+
+    .session-info div {
+      margin-bottom: 5px;
+    }
+
+    .heartbeat-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+      animation: pulse 2s infinite;
+    }
+
+    .heartbeat-indicator.alive {
+      background: #3fb950;
+    }
+
+    .heartbeat-indicator.unknown {
+      background: #6e7681;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    button {
+      padding: 8px 16px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #c9d1d9;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    button:hover {
+      background: #30363d;
+      border-color: #58a6ff;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .output-panel {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 20px;
+      margin-top: 30px;
+      display: none;
+    }
+
+    .output-panel.visible {
+      display: block;
+    }
+
+    .output-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .output-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #58a6ff;
+    }
+
+    .close-btn {
+      background: transparent;
+      border: none;
+      color: #8b949e;
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0;
+      width: 30px;
+      height: 30px;
+    }
+
+    .close-btn:hover {
+      color: #c9d1d9;
+    }
+
+    .output-content {
+      background: #000;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-x: auto;
+      white-space: pre;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .send-message {
+      margin-top: 15px;
+      display: flex;
+      gap: 10px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 8px 12px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      font-size: 14px;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #58a6ff;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #8b949e;
+    }
+
+    .empty-state h2 {
+      font-size: 24px;
+      margin-bottom: 10px;
+      color: #c9d1d9;
+    }
+
+    .stats {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 30px;
+      flex-wrap: wrap;
+    }
+
+    .stat-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 20px;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #58a6ff;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      color: #8b949e;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🤖 Coders Dashboard</h1>
+    <p class="subtitle">Monitor and interact with your AI coding sessions</p>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-value" id="total-sessions">0</div>
+        <div class="stat-label">Total Sessions</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="alive-sessions">0</div>
+        <div class="stat-label">Alive Sessions</div>
+      </div>
+    </div>
+
+    <div class="sessions-grid" id="sessions-grid">
+      <div class="empty-state">
+        <h2>No active sessions</h2>
+        <p>Spawn a coder session to get started!</p>
+      </div>
+    </div>
+
+    <div class="output-panel" id="output-panel">
+      <div class="output-header">
+        <div class="output-title" id="output-session-name">Session Output</div>
+        <button class="close-btn" onclick="closeOutput()">×</button>
+      </div>
+      <div class="output-content" id="output-content"></div>
+      <div class="send-message">
+        <input type="text" id="message-input" placeholder="Type a message to send to this session..." />
+        <button onclick="sendMessage()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentSession = null;
+    let updateInterval = null;
+
+    async function fetchSessions() {
+      try {
+        const response = await fetch('/api/sessions');
+        const sessions = await response.json();
+        renderSessions(sessions);
+        updateStats(sessions);
+      } catch (e) {
+        console.error('Failed to fetch sessions:', e);
+      }
+    }
+
+    function updateStats(sessions) {
+      document.getElementById('total-sessions').textContent = sessions.length;
+      document.getElementById('alive-sessions').textContent =
+        sessions.filter(s => s.status === 'alive').length;
+    }
+
+    function renderSessions(sessions) {
+      const grid = document.getElementById('sessions-grid');
+
+      if (sessions.length === 0) {
+        grid.innerHTML = `
+          <div class="empty-state">
+            <h2>No active sessions</h2>
+            <p>Spawn a coder session to get started!</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = sessions.map(session => {
+        const timeSince = session.lastSeen
+          ? formatTimeSince(Date.now() - session.lastSeen)
+          : 'Never';
+
+        return `
+          <div class="session-card">
+            <div class="session-header">
+              <div class="session-name">${session.sessionId}</div>
+              <div class="status ${session.status}">${session.status}</div>
+            </div>
+            <div class="session-info">
+              <div>
+                <span class="heartbeat-indicator ${session.status}"></span>
+                Last seen: ${timeSince}
+              </div>
+              <div>Windows: ${session.windows}</div>
+              <div>Activity: ${session.lastActivity}</div>
+              ${session.paneId ? `<div>Pane ID: ${session.paneId}</div>` : ''}
+            </div>
+            <div class="actions">
+              <button onclick="viewOutput('${session.sessionId}')">View Output</button>
+              <button onclick="attachSession('${session.sessionId}')">Attach (tmux)</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function formatTimeSince(ms) {
+      const seconds = Math.floor(ms / 1000);
+      if (seconds < 60) return `${seconds}s ago`;
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes}m ago`;
+      const hours = Math.floor(minutes / 60);
+      return `${hours}h ago`;
+    }
+
+    async function viewOutput(sessionId) {
+      currentSession = sessionId;
+      const response = await fetch(`/api/output?session=${sessionId}&lines=50`);
+      const data = await response.json();
+
+      document.getElementById('output-session-name').textContent = sessionId;
+      document.getElementById('output-content').textContent = data.output;
+      document.getElementById('output-panel').classList.add('visible');
+      document.getElementById('message-input').value = '';
+
+      // Auto-scroll to bottom
+      const content = document.getElementById('output-content');
+      content.scrollTop = content.scrollHeight;
+    }
+
+    function closeOutput() {
+      document.getElementById('output-panel').classList.remove('visible');
+      currentSession = null;
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('message-input');
+      const message = input.value.trim();
+
+      if (!message || !currentSession) return;
+
+      const response = await fetch('/api/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session: currentSession, message })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        input.value = '';
+        // Refresh output after a delay
+        setTimeout(() => viewOutput(currentSession), 2000);
+      } else {
+        alert('Failed to send message: ' + result.error);
+      }
+    }
+
+    function attachSession(sessionId) {
+      alert(`To attach to this session, run:\n\ntmux attach -t ${sessionId}`);
+    }
+
+    // Handle Enter key in message input
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('message-input')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+      });
+    });
+
+    // Auto-refresh
+    fetchSessions();
+    updateInterval = setInterval(fetchSessions, 3000);
+  </script>
+</body>
+</html>
