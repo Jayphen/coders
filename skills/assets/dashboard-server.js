@@ -31,6 +31,19 @@ const sseClients = new Set();
 const responseStates = new Map();
 let lastResponseSampleAt = 0;
 
+// Clean stale sessions every 60 seconds
+setInterval(() => {
+  const now = Date.now();
+  const STALE_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+
+  for (const [paneId, session] of sessions.entries()) {
+    if (now - session.lastSeen > STALE_THRESHOLD) {
+      sessions.delete(paneId);
+      console.log(`[Cleanup] Removed stale session: ${paneId}`);
+    }
+  }
+}, 60000);
+
 // Redis clients
 let redisClient;
 let redisSubscriber;
@@ -272,8 +285,21 @@ function killSession(sessionId) {
     return { success: false, error: 'Orchestrator session cannot be killed' };
   }
 
+  // Kill associated heartbeat process first
+  try {
+    execSync(`pkill -f "heartbeat.js.*${sessionId}"`);
+  } catch {} // May not exist
+
   try {
     execSync(`tmux kill-session -t "${sessionId}"`);
+
+    // Clean up sessions Map entries for this sessionId
+    for (const [paneId, session] of sessions.entries()) {
+      if (session.sessionId === sessionId) {
+        sessions.delete(paneId);
+      }
+    }
+
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };
@@ -412,10 +438,37 @@ async function start() {
 }
 
 // Handle shutdown gracefully
-process.on('SIGINT', async () => {
+async function shutdown() {
   console.log('\n[Dashboard] Shutting down...');
-  process.exit(0);
-});
+
+  // Close all SSE connections
+  for (const client of sseClients) {
+    client.end();
+  }
+  sseClients.clear();
+
+  // Disconnect Redis clients
+  try {
+    if (redisSubscriber?.isOpen) {
+      await redisSubscriber.unsubscribe();
+      await redisSubscriber.quit();
+    }
+    if (redisClient?.isOpen) {
+      await redisClient.quit();
+    }
+    console.log('[Dashboard] Redis connections closed');
+  } catch (e) {
+    console.error('[Dashboard] Error closing Redis:', e.message);
+  }
+
+  server.close(() => {
+    console.log('[Dashboard] Server closed');
+    process.exit(0);
+  });
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 process.on('uncaughtException', (err) => {
   console.error('[Dashboard] Uncaught Exception:', err);

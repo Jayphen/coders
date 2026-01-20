@@ -25,8 +25,6 @@ export interface SpawnOptions {
   redis?: RedisConfig;
   /** Enable heartbeat publishing (requires redis config) */
   enableHeartbeat?: boolean;
-  /** Enable dead-letter listener for auto-respawn (requires redis config) */
-  enableDeadLetter?: boolean;
   /** Custom pane ID (auto-generated if not provided) */
   paneId?: string;
 }
@@ -84,8 +82,6 @@ export interface CodersConfig {
   redis?: RedisConfig;
   /** Snapshot directory (default: ~/.coders/snapshots) */
   snapshotDir?: string;
-  /** Dead-letter timeout in ms (default: 120000) */
-  deadLetterTimeout?: number;
 }
 
 // ============================================================================
@@ -185,16 +181,12 @@ export const coders: {
   listenForMessages: (channel: string, callback: (message: any) => void, redisConfig?: RedisConfig) => Promise<void>;
   /** Redis manager class */
   RedisManager: typeof import('./redis').RedisManager;
-  /** Dead-letter listener class */
-  DeadLetterListener: typeof import('./redis').DeadLetterListener;
   /** Get pane ID helper */
   getPaneId: typeof import('./redis').getPaneId;
   /** Inject pane ID context helper */
   injectPaneIdContext: typeof import('./redis').injectPaneIdContext;
   /** Heartbeat channel name */
   HEARTBEAT_CHANNEL: string;
-  /** Dead-letter key name */
-  DEAD_LETTER_KEY: string;
 };
 
 /**
@@ -236,15 +228,6 @@ export class RedisManager {
 }
 
 /**
- * Dead Letter Listener - Watch for dead panes and respawn them
- */
-export class DeadLetterListener {
-  constructor(redisConfig?: RedisConfig);
-  start(timeoutMs?: number): Promise<void>;
-  stop(): void;
-}
-
-/**
  * Quick create heartbeat session
  */
 export function createHeartbeatSession(config?: RedisConfig): Promise<RedisManager>;
@@ -263,6 +246,5 @@ export function listSnapshots(options?: ListOptions): Array<{ filename: string; 
  */
 export const SNAPSHOT_DIR: string;
 export const HEARTBEAT_CHANNEL: string;
-export const DEAD_LETTER_KEY: string;
 
 export default coders;

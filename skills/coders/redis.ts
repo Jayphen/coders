@@ -95,6 +95,7 @@ export class RedisManager {
   private paneId: string;
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private deadLetterListener: ChildProcess | null = null;
+  private subscribers: Map<string, RedisClientType> = new Map();
 
   constructor(config: RedisConfig = {}) {
     this.config = {
@@ -129,6 +130,13 @@ export class RedisManager {
    */
   async disconnect(): Promise<void> {
     this.stopHeartbeat();
+    // Clean up all subscribers
+    for (const [channel, sub] of this.subscribers.entries()) {
+      try {
+        if (sub.isOpen) await sub.quit();
+      } catch {}
+    }
+    this.subscribers.clear();
     if (this.client?.isOpen) {
       await this.client.quit();
     }
@@ -229,11 +237,11 @@ export class RedisManager {
    */
   async subscribeToChannel(channel: string, callback: (message: any) => void): Promise<void> {
     if (!this.client?.isOpen) await this.connect();
-    
+
     const topic = `coders:msg:${channel}`;
     const subscriber = this.client.duplicate();
     await subscriber.connect();
-    
+
     await subscriber.subscribe(topic, (message) => {
       try {
         const data = JSON.parse(message);
@@ -242,6 +250,21 @@ export class RedisManager {
         console.error('[Redis] Failed to parse message:', e);
       }
     });
+
+    this.subscribers.set(channel, subscriber);
+  }
+
+  /**
+   * Unsubscribe from inter-agent communication channel
+   */
+  async unsubscribe(channel: string): Promise<void> {
+    const topic = `coders:msg:${channel}`;
+    const subscriber = this.subscribers.get(channel);
+    if (subscriber) {
+      await subscriber.unsubscribe(topic);
+      if (subscriber.isOpen) await subscriber.quit();
+      this.subscribers.delete(channel);
+    }
   }
 
   /**

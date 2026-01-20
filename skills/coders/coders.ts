@@ -1,8 +1,8 @@
 /**
  * Coder Spawner Skill for Claude Code
- * 
+ *
  * Spawn AI coding assistants in isolated tmux sessions with optional git worktrees.
- * Supports Redis heartbeat, pub/sub for inter-agent communication, and auto-respawn.
+ * Supports Redis heartbeat and pub/sub for inter-agent communication.
  * 
  * Usage:
  * import { coders } from '@jayphen/coders';
@@ -35,12 +35,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   RedisManager,
-  DeadLetterListener,
   getPaneId,
   injectPaneIdContext,
   RedisConfig,
-  HEARTBEAT_CHANNEL,
-  DEAD_LETTER_KEY
+  HEARTBEAT_CHANNEL
 } from './redis';
 import { generateSessionName } from './scripts/session-name.js';
 import { snapshot, restore, listSnapshots } from './tmux-resurrect';
@@ -59,7 +57,6 @@ export interface SpawnOptions {
   interactive?: boolean;
   redis?: RedisConfig;
   enableHeartbeat?: boolean;
-  enableDeadLetter?: boolean;
   paneId?: string;
 }
 
@@ -75,15 +72,13 @@ export interface CoderSession {
 export interface CodersConfig {
   redis?: RedisConfig;
   snapshotDir?: string;
-  deadLetterTimeout?: number;
 }
 
 /**
  * Global config for coders skill
  */
 let globalConfig: CodersConfig = {
-  snapshotDir: '~/.coders/snapshots',
-  deadLetterTimeout: 120000 // 2 minutes
+  snapshotDir: '~/.coders/snapshots'
 };
 
 /**
@@ -215,14 +210,12 @@ function createPrompt(task: string, contextFiles?: string[], paneId?: string, re
     prompt += `
 <!-- REDIS CONFIG -->
 <!-- HEARTBEAT_CHANNEL: ${HEARTBEAT_CHANNEL} -->
-<!-- DEAD_LETTER_KEY: ${DEAD_LETTER_KEY} -->
 
-Redis is configured for this session. Publish heartbeats to enable
-auto-respawn if you become unresponsive for >2 minutes.
+Redis is configured for this session. Publish heartbeats for session monitoring.
 
 Heartbeat format:
 {
-  "paneId": "${paneId || '<your-pane-id)'}",
+  "paneId": "${paneId || '<your-pane-id>'}",
   "status": "alive",
   "timestamp": Date.now()
 }
@@ -235,34 +228,19 @@ Publish to Redis channel: ${HEARTBEAT_CHANNEL}
 }
 
 /**
- * Start the dead-letter listener for a session
- */
-function startDeadLetterListener(redisConfig: RedisConfig): DeadLetterListener | null {
-  if (!redisConfig?.url) return null;
-  
-  const listener = new DeadLetterListener(redisConfig);
-  listener.start().catch(e => {
-    console.error('Failed to start dead-letter listener:', e);
-  });
-  
-  return listener;
-}
-
-/**
  * Spawn a new AI coding assistant in a tmux session
  */
 export async function spawn(options: SpawnOptions): Promise<string> {
-  const { 
-    tool, 
-    task = '', 
-    name, 
-    worktree, 
-    baseBranch = 'main', 
+  const {
+    tool,
+    task = '',
+    name,
+    worktree,
+    baseBranch = 'main',
     prd,
     interactive = true,
     redis: redisConfig,
     enableHeartbeat = !!redisConfig?.url,
-    enableDeadLetter = !!redisConfig?.url,
     paneId: providedPaneId
   } = options;
   
@@ -295,13 +273,7 @@ export async function spawn(options: SpawnOptions): Promise<string> {
   
   // Build command with environment variables
   const cmd = buildCommand(tool, promptFile, worktreePath, paneId, redisConfig, sessionId);
-  
-  // Start dead-letter listener if enabled
-  let deadLetterListener: DeadLetterListener | null = null;
-  if (enableDeadLetter && redisConfig) {
-    deadLetterListener = startDeadLetterListener(redisConfig);
-  }
-  
+
   try {
     // Clean up existing session if any
     try { execSync(`tmux kill-session -t ${sessionId}`); } catch {}
@@ -314,9 +286,8 @@ export async function spawn(options: SpawnOptions): Promise<string> {
       const redis = new RedisManager(redisConfig);
       await redis.connect();
       await redis.setPaneId(paneId);
-      if (enableHeartbeat) {
-        redis.startHeartbeat();
-      }
+      await redis.disconnect();
+      // Note: heartbeat is handled separately by heartbeat.js spawned in main.js
     }
     
     return `
@@ -329,7 +300,6 @@ export async function spawn(options: SpawnOptions): Promise<string> {
 **PRD:** ${prd || 'none'}
 **Redis:** ${redisConfig?.url || 'disabled'}
 **Heartbeat:** ${enableHeartbeat ? 'enabled' : 'disabled'}
-**Auto-Respawn:** ${enableDeadLetter ? 'enabled (2min timeout)' : 'disabled'}
 
 To attach:
 \`coders attach ${sessionName}\`
@@ -385,13 +355,12 @@ export function kill(sessionName: string): string {
  */
 export async function claude(
   task: string,
-  options?: { 
-    name?: string; 
-    worktree?: string; 
+  options?: {
+    name?: string;
+    worktree?: string;
     prd?: string;
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
-    enableDeadLetter?: boolean;
   }
 ): Promise<string> {
   return spawn({ tool: 'claude', task, ...options });
@@ -399,13 +368,12 @@ export async function claude(
 
 export async function gemini(
   task: string,
-  options?: { 
-    name?: string; 
-    worktree?: string; 
+  options?: {
+    name?: string;
+    worktree?: string;
     prd?: string;
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
-    enableDeadLetter?: boolean;
   }
 ): Promise<string> {
   return spawn({ tool: 'gemini', task, ...options });
@@ -413,13 +381,12 @@ export async function gemini(
 
 export async function codex(
   task: string,
-  options?: { 
-    name?: string; 
-    worktree?: string; 
+  options?: {
+    name?: string;
+    worktree?: string;
     prd?: string;
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
-    enableDeadLetter?: boolean;
   }
 ): Promise<string> {
   return spawn({ tool: 'codex', task, ...options });
@@ -427,13 +394,12 @@ export async function codex(
 
 export async function opencode(
   task: string,
-  options?: { 
-    name?: string; 
-    worktree?: string; 
+  options?: {
+    name?: string;
+    worktree?: string;
     prd?: string;
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
-    enableDeadLetter?: boolean;
   }
 ): Promise<string> {
   return spawn({ tool: 'opencode', task, ...options });
@@ -445,22 +411,20 @@ export async function opencode(
 export async function worktree(
   branchName: string,
   task: string,
-  options?: { 
-    tool?: 'claude' | 'gemini' | 'codex'; 
+  options?: {
+    tool?: 'claude' | 'gemini' | 'codex';
     prd?: string;
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
-    enableDeadLetter?: boolean;
   }
 ): Promise<string> {
-  return spawn({ 
-    tool: options?.tool || 'claude', 
-    task, 
-    worktree: branchName, 
+  return spawn({
+    tool: options?.tool || 'claude',
+    task,
+    worktree: branchName,
     prd: options?.prd,
     redis: options?.redis,
-    enableHeartbeat: options?.enableHeartbeat,
-    enableDeadLetter: options?.enableDeadLetter
+    enableHeartbeat: options?.enableHeartbeat
   });
 }
 
@@ -495,8 +459,7 @@ export async function spawnWithHeartbeat(
   return spawn({
     ...options,
     redis: options.redis || globalConfig.redis,
-    enableHeartbeat: true,
-    enableDeadLetter: true
+    enableHeartbeat: true
   });
 }
 
@@ -557,11 +520,9 @@ export const coders = {
   listenForMessages,
   // Re-export from redis.ts
   RedisManager,
-  DeadLetterListener,
   getPaneId,
   injectPaneIdContext,
   HEARTBEAT_CHANNEL,
-  DEAD_LETTER_KEY,
   // Tmux Resurrect
   snapshot,
   restore,

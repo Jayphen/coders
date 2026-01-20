@@ -215,6 +215,12 @@ function attachSession(sessionName) {
 
 function killSession(sessionName) {
   const fullName = `${TMUX_SESSION_PREFIX}${sessionName}`;
+
+  // Kill associated heartbeat process first
+  try {
+    execSync(`pkill -f "heartbeat.js.*${fullName}"`);
+  } catch {} // May not exist
+
   try {
     execSync(`tmux kill-session -t ${fullName}`);
     log(`✅ Killed session: ${fullName}`, 'green');
