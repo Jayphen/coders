@@ -89,7 +89,7 @@ tmux attach -t coder-SESSION_ID
 **Send messages remotely:**
 ```bash
 # Using helper script
-./scripts/send-to-session.sh coder-SESSION_ID "your message"
+./bin/send-to-session.sh coder-SESSION_ID "your message"
 
 # Check response
 tmux capture-pane -t coder-SESSION_ID -p | tail -20
@@ -166,13 +166,16 @@ coders/
 ├── skills/
 │   ├── main.js            # CLI entry point
 │   ├── test.js            # Test runner
-│   └── claude-code/
+│   ├── assets/            # Runtime assets (dashboard, heartbeat)
+│   └── coders/
 │       ├── SKILL.md       # Skill definition (required for discovery)
 │       ├── coders.ts      # Claude Code skill (TypeScript, loaded directly)
 │       ├── coders.d.ts    # Type definitions
-│       └── redis.ts       # Redis heartbeat & pub/sub
-├── scripts/
-│   └── tmux-resurrect.ts  # Snapshot/restore utility
+│       ├── redis.ts       # Redis heartbeat & pub/sub
+│       └── tmux-resurrect.ts # Snapshot/restore logic
+├── bin/
+│   ├── coders             # CLI wrapper
+│   └── send-to-session.sh # Helper script
 ├── .gitignore
 ├── package.json
 └── README.md

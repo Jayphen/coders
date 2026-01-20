@@ -1,0 +1,19 @@
+---
+description: Open the Coders dashboard (start server if needed)
+execute: node skills/main.js dashboard
+---
+
+# Open the Coders dashboard
+
+Starts the dashboard server if it is not already running and opens it in your browser.
+
+## Usage
+
+```
+/coders:dashboard
+```
+
+## Notes
+
+- Respects `DASHBOARD_PORT` if set (default: 3030).
+- Logs are written to your temp directory as `coders-dashboard.log`.

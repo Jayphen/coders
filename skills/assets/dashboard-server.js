@@ -17,6 +17,8 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const ORCHESTRATOR_SESSION_ID = 'coder-orchestrator';
+
 const PORT = process.env.DASHBOARD_PORT || 3030;
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const HEARTBEAT_CHANNEL = 'coders:heartbeats';
@@ -49,13 +51,14 @@ function getFormattedSessionList() {
 
   refreshResponseTimes(tmuxSessions);
 
-  return tmuxSessions.map(tmux => {
+  const sessionList = tmuxSessions.map(tmux => {
     const heartbeat = Array.from(sessions.values())
       .find(s => s.sessionId === tmux.sessionId);
     const responseState = responseStates.get(tmux.sessionId);
 
     const lastSeen = heartbeat?.lastSeen || 0;
     const isAlive = heartbeat && (now - lastSeen < 180000); // 3 min threshold
+    const isOrchestrator = tmux.sessionId === ORCHESTRATOR_SESSION_ID;
 
     return {
       sessionId: tmux.sessionId,
@@ -65,8 +68,16 @@ function getFormattedSessionList() {
       lastSeen: lastSeen || null,
       lastResponseAt: responseState?.lastResponseAt || heartbeat?.lastResponseAt || null,
       paneId: heartbeat?.paneId || null,
-      lastActivity: heartbeat?.lastActivity || 'unknown'
+      lastActivity: heartbeat?.lastActivity || 'unknown',
+      isOrchestrator: isOrchestrator
     };
+  });
+
+  // Sort sessions: orchestrator first, then by sessionId
+  return sessionList.sort((a, b) => {
+    if (a.isOrchestrator) return -1;
+    if (b.isOrchestrator) return 1;
+    return a.sessionId.localeCompare(b.sessionId);
   });
 }
 
@@ -214,6 +225,10 @@ function refreshResponseTimes(tmuxSessions) {
   }
 }
 
+function isValidSessionId(sessionId) {
+  return typeof sessionId === 'string' && /^coder-[A-Za-z0-9._-]+$/.test(sessionId);
+}
+
 // Send message to session
 function sendMessageToSession(sessionId, message) {
   try {
@@ -221,6 +236,23 @@ function sendMessageToSession(sessionId, message) {
     execSync(`tmux send-keys -t ${sessionId} "${message.replace(/"/g, '\\"')}"`);
     execSync(`sleep 0.5`);
     execSync(`tmux send-keys -t ${sessionId} C-m`);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function killSession(sessionId) {
+  if (!isValidSessionId(sessionId)) {
+    return { success: false, error: 'Invalid session id' };
+  }
+
+  if (sessionId === ORCHESTRATOR_SESSION_ID) {
+    return { success: false, error: 'Orchestrator session cannot be killed' };
+  }
+
+  try {
+    execSync(`tmux kill-session -t "${sessionId}"`);
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };
@@ -283,6 +315,27 @@ const server = http.createServer(async (req, res) => {
       try {
         const { session, message } = JSON.parse(body);
         const result = sendMessageToSession(session, message);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // API: Kill session
+  if (url.pathname === '/api/kill' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { session } = JSON.parse(body);
+        const result = killSession(session);
+        if (result.success) {
+          broadcast('sessions', getFormattedSessionList());
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(result));
       } catch (e) {

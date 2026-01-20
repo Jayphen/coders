@@ -2,10 +2,11 @@
   "name": "@jayphen/coders",
   "version": "1.0.0",
   "description": "Spawn AI coding assistants in isolated tmux sessions - Claude Code Plugin + CLI",
-  "main": "scripts/claude-code/coders.ts",
-  "types": "scripts/claude-code/coders.d.ts",
+  "main": "skills/coders/coders.ts",
+  "types": "skills/coders/coders.d.ts",
   "scripts": {
-    "test": "node scripts/test.js"
+    "test": "node skills/test.js",
+    "plugin:test": "claude --plugin-dir ."
   },
   "author": "Steve",
   "repository": "https://github.com/Jayphen/coders",

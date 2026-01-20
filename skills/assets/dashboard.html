@@ -55,6 +55,12 @@
       opacity: 0.5;
     }
 
+    .session-card.orchestrator {
+      background: linear-gradient(135deg, #1e2a3a 0%, #161b22 100%);
+      border: 2px solid #58a6ff;
+      box-shadow: 0 0 20px rgba(88, 166, 255, 0.2);
+    }
+
     .session-card:hover {
       border-color: #58a6ff;
     }
@@ -268,6 +274,141 @@
       color: #8b949e;
       font-size: 14px;
     }
+
+    .orchestrator-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #58a6ff 0%, #1f6feb 100%);
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-left: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .orchestrator-panel {
+      background: linear-gradient(135deg, #1e2a3a 0%, #161b22 100%);
+      border: 2px solid #58a6ff;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 30px;
+      box-shadow: 0 0 30px rgba(88, 166, 255, 0.3);
+    }
+
+    .orchestrator-panel.hidden {
+      display: none;
+    }
+
+    .orchestrator-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #30363d;
+    }
+
+    .orchestrator-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .orchestrator-title h2 {
+      font-size: 20px;
+      color: #58a6ff;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .orchestrator-controls {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      flex: 1;
+      margin-top: 15px;
+    }
+
+    .orchestrator-input-group {
+      display: flex;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .orchestrator-input-group input {
+      flex: 1;
+      padding: 10px 15px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      font-size: 14px;
+    }
+
+    .orchestrator-input-group input:focus {
+      outline: none;
+      border-color: #58a6ff;
+      box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
+    }
+
+    .orchestrator-input-group button {
+      padding: 10px 20px;
+      background: linear-gradient(135deg, #58a6ff 0%, #1f6feb 100%);
+      border: none;
+      color: white;
+      font-weight: 600;
+    }
+
+    .orchestrator-input-group button:hover {
+      background: linear-gradient(135deg, #6cb6ff 0%, #3d8bfd 100%);
+    }
+
+    .orchestrator-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+      font-size: 13px;
+      color: #8b949e;
+    }
+
+    .orchestrator-stat {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .orchestrator-stat-label {
+      color: #6e7681;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .orchestrator-stat-value {
+      color: #58a6ff;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .sections-divider {
+      margin: 40px 0 30px 0;
+      border: 0;
+      height: 1px;
+      background: linear-gradient(to right, transparent, #30363d, transparent);
+    }
+
+    .section-title {
+      color: #8b949e;
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 20px;
+    }
   </style>
 </head>
 <body>
@@ -285,6 +426,50 @@
         <div class="stat-label">Alive Sessions</div>
       </div>
     </div>
+
+    <!-- Orchestrator Panel -->
+    <div class="orchestrator-panel hidden" id="orchestrator-panel">
+      <div class="orchestrator-header">
+        <div class="orchestrator-title">
+          <h2>🎯 Orchestrator</h2>
+          <div class="status" id="orchestrator-status">unknown</div>
+        </div>
+      </div>
+
+      <div class="orchestrator-stats" id="orchestrator-stats">
+        <div class="orchestrator-stat">
+          <div class="orchestrator-stat-label">Last Seen</div>
+          <div class="orchestrator-stat-value" id="orchestrator-last-seen">Never</div>
+        </div>
+        <div class="orchestrator-stat">
+          <div class="orchestrator-stat-label">Last Response</div>
+          <div class="orchestrator-stat-value" id="orchestrator-last-response">Never</div>
+        </div>
+        <div class="orchestrator-stat">
+          <div class="orchestrator-stat-label">Activity</div>
+          <div class="orchestrator-stat-value" id="orchestrator-activity">unknown</div>
+        </div>
+        <div class="orchestrator-stat">
+          <div class="orchestrator-stat-label">Windows</div>
+          <div class="orchestrator-stat-value" id="orchestrator-windows">0</div>
+        </div>
+      </div>
+
+      <div class="orchestrator-controls">
+        <div class="orchestrator-input-group">
+          <input
+            type="text"
+            id="orchestrator-input"
+            placeholder="Send command to orchestrator (e.g., 'coders spawn claude --task \"Fix the bug\"')"
+          />
+          <button onclick="sendToOrchestrator()">Send</button>
+        </div>
+        <button onclick="viewOrchestratorOutput()">View Output</button>
+      </div>
+    </div>
+
+    <hr class="sections-divider">
+    <div class="section-title">Coder Sessions</div>
 
     <div class="sessions-grid" id="sessions-grid">
       <div class="empty-state">
@@ -328,9 +513,38 @@
     }
 
     function renderSessions(sessions) {
-      const grid = document.getElementById('sessions-grid');
+      // Separate orchestrator from regular sessions
+      const orchestrator = sessions.find(s => s.isOrchestrator);
+      const regularSessions = sessions.filter(s => !s.isOrchestrator);
 
-      if (sessions.length === 0) {
+      // Update orchestrator panel
+      const orchestratorPanel = document.getElementById('orchestrator-panel');
+      if (orchestrator) {
+        orchestratorPanel.classList.remove('hidden');
+
+        const timeSince = orchestrator.lastSeen
+          ? formatTimeSince(Date.now() - orchestrator.lastSeen)
+          : 'Never';
+        const responseAgeMs = orchestrator.lastResponseAt
+          ? Date.now() - orchestrator.lastResponseAt
+          : null;
+        const responseSince = responseAgeMs !== null
+          ? formatTimeSince(responseAgeMs)
+          : 'Never';
+
+        document.getElementById('orchestrator-status').textContent = orchestrator.status;
+        document.getElementById('orchestrator-status').className = `status ${orchestrator.status}`;
+        document.getElementById('orchestrator-last-seen').textContent = timeSince;
+        document.getElementById('orchestrator-last-response').textContent = responseSince;
+        document.getElementById('orchestrator-activity').textContent = orchestrator.lastActivity;
+        document.getElementById('orchestrator-windows').textContent = orchestrator.windows;
+      } else {
+        orchestratorPanel.classList.add('hidden');
+      }
+
+      // Render regular sessions grid
+      const grid = document.getElementById('sessions-grid');
+      if (regularSessions.length === 0) {
         grid.innerHTML = `
           <div class="empty-state">
             <h2>No active sessions</h2>
@@ -340,7 +554,7 @@
         return;
       }
 
-      grid.innerHTML = sessions.map(session => {
+      grid.innerHTML = regularSessions.map(session => {
         const timeSince = session.lastSeen
           ? formatTimeSince(Date.now() - session.lastSeen)
           : 'Never';
@@ -371,6 +585,7 @@
             <div class="actions">
               <button onclick="viewOutput('${session.sessionId}')">View Output</button>
               <button onclick="attachSession('${session.sessionId}')">Attach (tmux)</button>
+              <button onclick="killSession('${session.sessionId}')">Kill</button>
             </div>
           </div>
         `;
@@ -443,12 +658,73 @@
       alert(`To attach to this session, run:\n\ntmux attach -t ${sessionId}`);
     }
 
-    // Handle Enter key in message input
+    async function sendToOrchestrator() {
+      const input = document.getElementById('orchestrator-input');
+      const message = input.value.trim();
+
+      if (!message) return;
+
+      const response = await fetch('/api/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session: 'coder-orchestrator', message })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        input.value = '';
+        // Show success feedback
+        const originalPlaceholder = input.placeholder;
+        input.placeholder = '✓ Sent successfully!';
+        setTimeout(() => {
+          input.placeholder = originalPlaceholder;
+        }, 2000);
+      } else {
+        alert('Failed to send message: ' + result.error);
+      }
+    }
+
+    function viewOrchestratorOutput() {
+      viewOutput('coder-orchestrator');
+    }
+
+    async function killSession(sessionId) {
+      const confirmed = confirm(`Kill session "${sessionId}"? This cannot be undone.`);
+      if (!confirmed) return;
+
+      try {
+        const response = await fetch('/api/kill', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session: sessionId })
+        });
+
+        const result = await response.json();
+        if (!result.success) {
+          alert(`Failed to kill session: ${result.error}`);
+          return;
+        }
+
+        if (currentSession === sessionId) {
+          closeOutput();
+        }
+        fetchSessions();
+      } catch (e) {
+        alert(`Failed to kill session: ${e.message}`);
+      }
+    }
+
+    // Handle Enter key in message inputs
     document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('message-input')?.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
       });
-      
+
+      document.getElementById('orchestrator-input')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendToOrchestrator();
+      });
+
       // Start SSE
       setupSSE();
       // Also fetch once immediately

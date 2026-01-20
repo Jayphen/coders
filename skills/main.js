@@ -125,13 +125,12 @@ function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHea
 
     // Start heartbeat in background if enabled
     if (enableHeartbeat) {
-      try {
-        const scriptDir = path.dirname(new URL(import.meta.url).pathname);
-        const heartbeatScript = path.join(scriptDir, '../scripts/heartbeat.js');
-        execSync(`SESSION_ID="${sessionId}" nohup node ${heartbeatScript} "${sessionId}" > /dev/null 2>&1 &`);
-        log(`💓 Heartbeat enabled (dashboard will show status)`, 'green');
-      } catch (e) {
-        log(`⚠️  Heartbeat failed to start: ${e.message}`, 'yellow');
+          try {
+            const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+            const heartbeatScript = path.join(scriptDir, 'assets/heartbeat.js');
+            execSync(`SESSION_ID="${sessionId}" nohup node ${heartbeatScript} "${sessionId}" > /dev/null 2>&1 &`);
+            log(`💓 Heartbeat enabled (dashboard will show status)`, 'green');
+          } catch (e) {        log(`⚠️  Heartbeat failed to start: ${e.message}`, 'yellow');
       }
     }
 
@@ -278,7 +277,7 @@ other coder sessions. Start by spawning your first session or listing existing o
     // Start heartbeat for orchestrator
     try {
       const scriptDir = path.dirname(new URL(import.meta.url).pathname);
-      const heartbeatScript = path.join(scriptDir, '../scripts/heartbeat.js');
+      const heartbeatScript = path.join(scriptDir, 'assets/heartbeat.js');
       execSync(`SESSION_ID="${sessionId}" nohup node ${heartbeatScript} "${sessionId}" > /dev/null 2>&1 &`);
       log(`💓 Heartbeat enabled for orchestrator`, 'green');
     } catch (e) {
@@ -367,7 +366,7 @@ async function waitForDashboard(port, timeoutMs = 5000) {
 
 function startDashboardServer(port) {
   const scriptDir = path.dirname(new URL(import.meta.url).pathname);
-  const dashboardScript = path.join(scriptDir, '../scripts/dashboard-server.js');
+  const dashboardScript = path.join(scriptDir, 'assets/dashboard-server.js');
   const logPath = path.join(os.tmpdir(), 'coders-dashboard.log');
   const logHandle = fs.openSync(logPath, 'a');
 

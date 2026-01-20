@@ -43,6 +43,7 @@ import {
   DEAD_LETTER_KEY
 } from './redis';
 import { generateSessionName } from '../session-name.js';
+import { snapshot, restore, listSnapshots } from './tmux-resurrect';
 
 const WORKTREE_BASE = '../worktrees';
 const SESSION_PREFIX = 'coder-';
@@ -560,7 +561,11 @@ export const coders = {
   getPaneId,
   injectPaneIdContext,
   HEARTBEAT_CHANNEL,
-  DEAD_LETTER_KEY
+  DEAD_LETTER_KEY,
+  // Tmux Resurrect
+  snapshot,
+  restore,
+  listSnapshots
 };
 
 export default coders;
