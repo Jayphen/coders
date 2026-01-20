@@ -1,4 +1,11 @@
+---
+description: Spawn an AI coding assistant in a new tmux session
+execute: node skills/main.js spawn
+---
+
 # Spawn an AI coding assistant in a new tmux session
+
+**Execute with:** `node skills/main.js spawn [tool] [options]` from the plugin root directory
 
 Spawn Claude, Gemini, Codex, or OpenCode in an isolated tmux window with optional git worktree.
 

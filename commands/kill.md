@@ -1,4 +1,11 @@
+---
+description: Kill a coder session
+execute: node skills/main.js kill
+---
+
 # Kill a coder session
+
+**Execute with:** `node skills/main.js kill <session-name>` from the plugin root directory
 
 Terminate an active tmux session spawned by the coders plugin.
 

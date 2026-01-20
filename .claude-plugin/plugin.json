@@ -1,7 +1,5 @@
 {
-  "$schema": "https://code.claude.com/schemas/plugin.json",
   "name": "coders",
-  "displayName": "Coder Spawner",
   "version": "1.0.0",
   "description": "Spawn AI coding assistants (Claude, Gemini, Codex, OpenCode) in isolated tmux sessions with optional git worktrees",
   "author": {
@@ -13,9 +11,5 @@
   "repository": "https://github.com/Jayphen/coders",
   "license": "MIT",
   "keywords": ["ai", "claude", "gemini", "codex", "opencode", "spawn", "tmux", "coding"],
-  "commands": "./skills/commands",
-  "agents": "./skills/agents",
-  "skills": "./skills/claude-code",
-  "hooks": "./skills/hooks.json",
-  "mcpServers": "./skills/mcp-config.json"
+  "hooks": "./hooks/hooks.json"
 }

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-const { execSync, spawn } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+import { execSync, spawn } from 'child_process';
+import fs from 'fs';
+import path from 'path';
 
 const TMUX_SESSION_PREFIX = 'coder-';
 
@@ -74,15 +74,18 @@ function generateInitialPrompt(tool, taskDescription, contextFiles = []) {
 
 function buildSpawnCommand(tool, promptFile, extraEnv = {}) {
   let cmd;
-  
+
   if (tool === 'claude' || tool === 'claude-code') {
     cmd = `CLAUDE=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} claude --dangerously-spawn-permission -f "${promptFile}"`;
   } else if (tool === 'gemini') {
-    cmd = `GEMINI=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} gemini -f "${promptFile}"`;
+    // Gemini uses positional arguments for prompt, with --yolo for auto-approval
+    cmd = `GEMINI=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} gemini --yolo '$(cat ${promptFile})'`;
   } else if (tool === 'codex' || tool === 'openai-codex') {
-    cmd = `CODEX=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} codex -f "${promptFile}"`;
+    // Codex doesn't use -f, it takes prompt as an argument
+    // Use single quotes around the command substitution to avoid quote conflicts
+    cmd = `CODEX=${Object.entries(extraEnv).map(([k,v]) => `${k}="${v}"`).join(' ')} codex --dangerously-bypass-approvals-and-sandbox '$(cat ${promptFile})'`;
   }
-  
+
   return cmd;
 }
 
@@ -101,8 +104,9 @@ function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName) {
   } catch {}
   
   // Create new session (this opens a WINDOW)
-  const fullCmd = `tmux new-session -s "${sessionId}" -d "${cmd}"`;
-  
+  // Use shell command that keeps session alive after codex exits
+  const fullCmd = `tmux new-session -s "${sessionId}" -d "cd ${worktreePath}; ${cmd}; exec $SHELL"`;
+
   try {
     execSync(fullCmd);
     log(`✅ Created tmux window: ${sessionId}`, 'green');
@@ -294,11 +298,8 @@ if (command === 'help' || !command) {
   const prompt = generateInitialPrompt(tool, taskDesc, contextFiles);
   
   // Spawn in new tmux window
-  if (process.platform === 'darwin') {
-    spawnInITerm(tool, worktreePath, prompt, sessionName);
-  } else {
-    spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName);
-  }
+  // Always use tmux for reliability
+  spawnInNewTmuxWindow(tool, worktreePath || process.cwd(), prompt, sessionName);
   
   log(`\n✅ Created new window for session "${sessionName}"!`, 'green');
   log(`💡 Attach: coders attach ${sessionName}`, 'yellow');

@@ -1,4 +1,11 @@
+---
+description: Save a snapshot of all tmux sessions
+execute: npx tsx scripts/tmux-resurrect.ts snapshot
+---
+
 # Snapshot tmux sessions
+
+**Execute with:** `npx tsx scripts/tmux-resurrect.ts snapshot` from the plugin root directory
 
 Save a snapshot of all tmux sessions to ~/.coders/snapshots/
 

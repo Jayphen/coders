@@ -1,4 +1,11 @@
+---
+description: Restore tmux sessions from the latest snapshot
+execute: npx tsx scripts/tmux-resurrect.ts restore
+---
+
 # Restore tmux sessions
+
+**Execute with:** `npx tsx scripts/tmux-resurrect.ts restore` from the plugin root directory
 
 Restore tmux sessions from the latest snapshot.
 

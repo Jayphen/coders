@@ -128,14 +128,23 @@ restore();    // Restores from latest snapshot
 coders/
 ├── .claude-plugin/
 │   └── plugin.json        # Plugin manifest (Claude Code discovers this)
+├── commands/              # Slash commands (auto-discovered)
+│   ├── spawn.md
+│   ├── list.md
+│   ├── attach.md
+│   ├── kill.md
+│   ├── snapshot.md
+│   └── restore.md
 ├── skills/
-│   ├── main.js           # CLI entry point
-│   ├── test.js           # Test runner
-│   ├── claude-code/
-│   │   ├── coders.ts     # Claude Code skill (TypeScript, loaded directly)
-│   │   ├── coders.d.ts   # Type definitions
-│   │   └── redis.ts      # Redis heartbeat & pub/sub
-│   └── tmux-resurrect.ts # Snapshot/restore utility
+│   ├── main.js            # CLI entry point
+│   ├── test.js            # Test runner
+│   └── claude-code/
+│       ├── SKILL.md       # Skill definition (required for discovery)
+│       ├── coders.ts      # Claude Code skill (TypeScript, loaded directly)
+│       ├── coders.d.ts    # Type definitions
+│       └── redis.ts       # Redis heartbeat & pub/sub
+├── scripts/
+│   └── tmux-resurrect.ts  # Snapshot/restore utility
 ├── .gitignore
 ├── package.json
 └── README.md

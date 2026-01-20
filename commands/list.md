@@ -1,4 +1,11 @@
+---
+description: List all active coder sessions
+execute: node skills/main.js list
+---
+
 # List all active coder sessions
+
+**Execute with:** `node skills/main.js list` from the plugin root directory
 
 Show all tmux sessions spawned by the coders plugin.
 
