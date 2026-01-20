@@ -51,6 +51,10 @@
       transition: border-color 0.2s;
     }
 
+    .session-card.stale {
+      opacity: 0.5;
+    }
+
     .session-card:hover {
       border-color: #58a6ff;
     }
@@ -340,9 +344,16 @@
         const timeSince = session.lastSeen
           ? formatTimeSince(Date.now() - session.lastSeen)
           : 'Never';
+        const responseAgeMs = session.lastResponseAt
+          ? Date.now() - session.lastResponseAt
+          : null;
+        const responseSince = responseAgeMs !== null
+          ? formatTimeSince(responseAgeMs)
+          : 'Never';
+        const isStale = responseAgeMs !== null && responseAgeMs > 5 * 60 * 1000;
 
         return `
-          <div class="session-card">
+          <div class="session-card ${isStale ? 'stale' : ''}">
             <div class="session-header">
               <div class="session-name">${session.sessionId}</div>
               <div class="status ${session.status}">${session.status}</div>
@@ -352,6 +363,7 @@
                 <span class="heartbeat-indicator ${session.status}"></span>
                 Last seen: ${timeSince}
               </div>
+              <div>Last response: ${responseSince}</div>
               <div>Windows: ${session.windows}</div>
               <div>Activity: ${session.lastActivity}</div>
               ${session.paneId ? `<div>Pane ID: ${session.paneId}</div>` : ''}

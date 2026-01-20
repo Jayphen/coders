@@ -2,6 +2,7 @@
 
 import { execSync, spawn } from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 const TMUX_SESSION_PREFIX = 'coder-';
@@ -236,6 +237,7 @@ ${colors.green}Usage:${colors.reset}
   coders list
   coders attach <session>
   coders kill <session>
+  coders dashboard
   coders help
 
 ${colors.green}Tools:${colors.reset}
@@ -250,6 +252,7 @@ ${colors.green}Options:${colors.reset}
   --prd <file>           Read PRD/spec file and prime the AI
   --spec <file>          Alias for --prd
   --task <description>   Task description
+  --no-heartbeat         Disable heartbeat tracking (enabled by default)
 
 ${colors.green}Examples:${colors.reset}
   coders spawn claude --worktree feature/auth --prd docs/prd.md
@@ -257,12 +260,82 @@ ${colors.green}Examples:${colors.reset}
   coders list
   coders attach feature-auth
   coders kill feature-auth
+  coders dashboard
 
 ${colors.green}How it works:${colors.reset}
   1. Creates NEW tmux window (visible!)
   2. Runs Claude/Gemini/Codex in it
   3. Attach with: coders attach <name>
 `);
+}
+
+async function isDashboardRunning(port) {
+  try {
+    const response = await fetch(`http://localhost:${port}/api/sessions`);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForDashboard(port, timeoutMs = 5000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await isDashboardRunning(port)) return true;
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  return false;
+}
+
+function startDashboardServer(port) {
+  const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+  const dashboardScript = path.join(scriptDir, '../scripts/dashboard-server.js');
+  const logPath = path.join(os.tmpdir(), 'coders-dashboard.log');
+  const logHandle = fs.openSync(logPath, 'a');
+
+  const child = spawn('node', [dashboardScript], {
+    detached: true,
+    stdio: ['ignore', logHandle, logHandle],
+    env: { ...process.env, DASHBOARD_PORT: String(port) }
+  });
+  child.unref();
+  return logPath;
+}
+
+function openDashboard(url) {
+  try {
+    if (process.platform === 'darwin') {
+      execSync(`open "${url}"`);
+    } else if (process.platform === 'win32') {
+      execSync(`start "" "${url}"`, { shell: 'cmd.exe' });
+    } else {
+      execSync(`xdg-open "${url}"`);
+    }
+  } catch (e) {
+    log(`⚠️  Failed to open browser: ${e.message}`, 'yellow');
+    log(`Open manually: ${url}`, 'yellow');
+  }
+}
+
+async function launchDashboard() {
+  const port = process.env.DASHBOARD_PORT || '3030';
+  const url = `http://localhost:${port}`;
+
+  if (!(await isDashboardRunning(port))) {
+    const logPath = startDashboardServer(port);
+    const started = await waitForDashboard(port);
+    if (started) {
+      log(`✅ Dashboard server started on ${url}`, 'green');
+      log(`📝 Logs: ${logPath}`, 'yellow');
+    } else {
+      log(`⚠️  Dashboard server may not have started yet.`, 'yellow');
+      log(`📝 Logs: ${logPath}`, 'yellow');
+    }
+  } else {
+    log(`✅ Dashboard already running on ${url}`, 'green');
+  }
+
+  openDashboard(url);
 }
 
 // Main
@@ -287,6 +360,10 @@ if (command === 'help' || !command) {
   } else {
     killSession(sessionName);
   }
+} else if (command === 'dashboard') {
+  launchDashboard().catch((err) => {
+    log(`❌ Failed to launch dashboard: ${err.message}`, 'red');
+  });
 } else if (command === 'spawn') {
   const tool = args[1];
 
@@ -300,7 +377,7 @@ if (command === 'help' || !command) {
   let baseBranch = 'main';
   let prdFile = null;
   let taskDesc = 'Complete the assigned task';
-  let enableHeartbeat = false;
+  let enableHeartbeat = true; // Enabled by default for dashboard tracking
 
   for (let i = 2; i < args.length; i++) {
     const arg = args[i];
@@ -321,6 +398,8 @@ if (command === 'help' || !command) {
       i++;
     } else if (arg === '--heartbeat' || arg === '--dashboard') {
       enableHeartbeat = true;
+    } else if (arg === '--no-heartbeat') {
+      enableHeartbeat = false;
     }
   }
 
@@ -346,7 +425,7 @@ if (command === 'help' || !command) {
   log(`\n✅ Created new window for session "${sessionName}"!`, 'green');
   log(`💡 Attach: coders attach ${sessionName}`, 'yellow');
   if (enableHeartbeat) {
-    log(`💡 View dashboard: http://localhost:3030`, 'yellow');
+    log(`💡 View dashboard: coders dashboard`, 'yellow');
   }
 } else {
   log(`Unknown command: ${command}`, 'red');

@@ -21,10 +21,14 @@ const PORT = process.env.DASHBOARD_PORT || 3030;
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const HEARTBEAT_CHANNEL = 'coders:heartbeats';
 const PANE_KEY_PREFIX = 'coders:pane:';
+const RESPONSE_SAMPLE_LINES = 20;
+const RESPONSE_SAMPLE_INTERVAL_MS = 5000;
 
 // Store active sessions and SSE clients
 const sessions = new Map();
 const sseClients = new Set();
+const responseStates = new Map();
+let lastResponseSampleAt = 0;
 
 // Redis clients
 let redisClient;
@@ -43,9 +47,12 @@ function getFormattedSessionList() {
   const tmuxSessions = getTmuxSessions();
   const now = Date.now();
 
+  refreshResponseTimes(tmuxSessions);
+
   return tmuxSessions.map(tmux => {
     const heartbeat = Array.from(sessions.values())
       .find(s => s.sessionId === tmux.sessionId);
+    const responseState = responseStates.get(tmux.sessionId);
 
     const lastSeen = heartbeat?.lastSeen || 0;
     const isAlive = heartbeat && (now - lastSeen < 180000); // 3 min threshold
@@ -56,6 +63,7 @@ function getFormattedSessionList() {
       status: isAlive ? 'alive' : 'unknown',
       lastHeartbeat: heartbeat?.timestamp || null,
       lastSeen: lastSeen || null,
+      lastResponseAt: responseState?.lastResponseAt || heartbeat?.lastResponseAt || null,
       paneId: heartbeat?.paneId || null,
       lastActivity: heartbeat?.lastActivity || 'unknown'
     };
@@ -154,6 +162,55 @@ function getSessionOutput(sessionId, lines = 30) {
     return output;
   } catch (e) {
     return 'Error capturing output';
+  }
+}
+
+function getSessionOutputSnapshot(sessionId, lines = RESPONSE_SAMPLE_LINES) {
+  try {
+    const output = execSync(
+      `tmux capture-pane -t ${sessionId} -p -S -${lines} 2>/dev/null || echo ""`,
+      { encoding: 'utf8' }
+    );
+    return output.trimEnd();
+  } catch (e) {
+    return '';
+  }
+}
+
+function refreshResponseTimes(tmuxSessions) {
+  const now = Date.now();
+  if (now - lastResponseSampleAt < RESPONSE_SAMPLE_INTERVAL_MS) {
+    return;
+  }
+  lastResponseSampleAt = now;
+
+  const activeSessionIds = new Set(tmuxSessions.map(session => session.sessionId));
+  for (const sessionId of responseStates.keys()) {
+    if (!activeSessionIds.has(sessionId)) {
+      responseStates.delete(sessionId);
+    }
+  }
+
+  for (const session of tmuxSessions) {
+    const snapshot = getSessionOutputSnapshot(session.sessionId);
+    if (!snapshot) continue;
+
+    const state = responseStates.get(session.sessionId) || {
+      lastSignature: null,
+      lastResponseAt: null
+    };
+
+    if (state.lastSignature === null) {
+      state.lastSignature = snapshot;
+      if (state.lastResponseAt === null) {
+        state.lastResponseAt = now;
+      }
+    } else if (state.lastSignature !== snapshot) {
+      state.lastSignature = snapshot;
+      state.lastResponseAt = now;
+    }
+
+    responseStates.set(session.sessionId, state);
   }
 }
 
