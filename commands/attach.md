@@ -1,11 +1,13 @@
 ---
 description: Attach to a coder session
-execute: node skills/main.js attach
 ---
 
 # Attach to a coder session
 
-**Execute with:** `node skills/main.js attach <session-name>` from the plugin root directory
+Execute:
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js attach $ARGUMENTS
+```
 
 Attach to an existing tmux session spawned by the coders plugin.
 

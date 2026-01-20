@@ -1,11 +1,13 @@
 ---
 description: Save a snapshot of all tmux sessions
-execute: npx tsx scripts/tmux-resurrect.ts snapshot
 ---
 
 # Snapshot tmux sessions
 
-**Execute with:** `npx tsx scripts/tmux-resurrect.ts snapshot` from the plugin root directory
+Execute:
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js snapshot
+```
 
 Save a snapshot of all tmux sessions to ~/.coders/snapshots/
 

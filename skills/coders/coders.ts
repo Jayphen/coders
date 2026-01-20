@@ -42,7 +42,7 @@ import {
   HEARTBEAT_CHANNEL,
   DEAD_LETTER_KEY
 } from './redis';
-import { generateSessionName } from '../session-name.js';
+import { generateSessionName } from './scripts/session-name.js';
 import { snapshot, restore, listSnapshots } from './tmux-resurrect';
 
 const WORKTREE_BASE = '../worktrees';

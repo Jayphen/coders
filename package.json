@@ -5,7 +5,7 @@
   "main": "skills/coders/coders.ts",
   "types": "skills/coders/coders.d.ts",
   "scripts": {
-    "test": "node skills/test.js",
+    "test": "node skills/coders/scripts/test.js",
     "plugin:test": "claude --plugin-dir ."
   },
   "author": "Steve",
