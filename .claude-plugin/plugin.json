@@ -4,7 +4,7 @@
   "description": "Spawn AI coding assistants (Claude, Gemini, Codex, OpenCode) in isolated tmux sessions with real-time monitoring dashboard, auto-generated session names, and git worktree support",
   "author": {
     "name": "Steve",
-    "email": "steve@example.com",
+    "email": "software@jayphen.com",
     "url": "https://github.com/Jayphen"
   },
   "homepage": "https://github.com/Jayphen/coders",
