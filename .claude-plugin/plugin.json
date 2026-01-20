@@ -1,7 +1,7 @@
 {
   "name": "coders",
-  "version": "1.0.0",
-  "description": "Spawn AI coding assistants (Claude, Gemini, Codex, OpenCode) in isolated tmux sessions with optional git worktrees",
+  "version": "1.1.0",
+  "description": "Spawn AI coding assistants (Claude, Gemini, Codex, OpenCode) in isolated tmux sessions with real-time monitoring dashboard, auto-generated session names, and git worktree support",
   "author": {
     "name": "Steve",
     "email": "steve@example.com",
@@ -10,6 +10,50 @@
   "homepage": "https://github.com/Jayphen/coders",
   "repository": "https://github.com/Jayphen/coders",
   "license": "MIT",
-  "keywords": ["ai", "claude", "gemini", "codex", "opencode", "spawn", "tmux", "coding"],
-  "hooks": "./hooks/hooks.json"
+  "keywords": [
+    "ai",
+    "claude",
+    "gemini",
+    "codex",
+    "opencode",
+    "spawn",
+    "tmux",
+    "coding",
+    "automation",
+    "multi-session",
+    "parallel",
+    "workflow",
+    "monitoring",
+    "dashboard"
+  ],
+  "category": "productivity",
+  "skills": [
+    "./skills/claude-code"
+  ],
+  "commands": [
+    "./commands"
+  ],
+  "hooks": "./hooks/hooks.json",
+  "metadata": {
+    "features": [
+      "Spawn Claude, Gemini, or OpenCode in isolated tmux sessions",
+      "Auto-generate descriptive session names from task descriptions",
+      "Real-time monitoring dashboard with heartbeat tracking (http://localhost:3030)",
+      "Redis-backed session state persistence",
+      "Git worktree support for parallel development branches",
+      "Background task automation with monitoring scripts",
+      "Session snapshot and restore capabilities",
+      "Interactive and non-interactive modes",
+      "Task-based spawning with context files (PRDs, specs)"
+    ],
+    "requirements": [
+      "tmux",
+      "node.js >= 22.0.0",
+      "Redis (optional, for dashboard and heartbeat monitoring)"
+    ],
+    "installation": {
+      "postInstall": "npm install",
+      "dashboard": "node scripts/dashboard-server.js"
+    }
+  }
 }
