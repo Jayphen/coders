@@ -60,6 +60,31 @@ async function subscribeToHeartbeats() {
   console.log('[Redis] Subscribed to heartbeats');
 }
 
+// Load initial state from Redis keys
+async function loadInitialState() {
+  try {
+    const keys = await redisClient.keys(`${PANE_KEY_PREFIX}*`);
+    for (const key of keys) {
+      try {
+        const value = await redisClient.get(key);
+        if (value) {
+          const data = JSON.parse(value);
+          // usage of data.timestamp for lastSeen is an approximation
+          sessions.set(data.paneId, {
+            ...data,
+            lastSeen: Date.now() 
+          });
+        }
+      } catch (e) {
+        console.error('[Initial Load] Error reading key', key, e);
+      }
+    }
+    console.log(`[Redis] Loaded ${keys.length} sessions from cache`);
+  } catch (e) {
+    console.error('[Initial Load] Failed to list keys:', e);
+  }
+}
+
 // Get tmux session info
 function getTmuxSessions() {
   try {
@@ -224,6 +249,7 @@ const server = http.createServer(async (req, res) => {
 async function start() {
   await connectRedis();
   await subscribeToHeartbeats();
+  await loadInitialState();
 
   server.listen(PORT, () => {
     console.log(`\n🎯 Coders Dashboard running at http://localhost:${PORT}`);

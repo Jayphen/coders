@@ -372,19 +372,26 @@
       return `${hours}h ago`;
     }
 
-    async function viewOutput(sessionId) {
-      currentSession = sessionId;
+    async function viewOutput(sessionId, isRefresh = false) {
+      if (!isRefresh) {
+        currentSession = sessionId;
+        document.getElementById('output-session-name').textContent = sessionId;
+        document.getElementById('output-panel').classList.add('visible');
+        document.getElementById('message-input').value = '';
+      }
+
       const response = await fetch(`/api/output?session=${sessionId}&lines=50`);
       const data = await response.json();
-
-      document.getElementById('output-session-name').textContent = sessionId;
-      document.getElementById('output-content').textContent = data.output;
-      document.getElementById('output-panel').classList.add('visible');
-      document.getElementById('message-input').value = '';
-
-      // Auto-scroll to bottom
+      
       const content = document.getElementById('output-content');
-      content.scrollTop = content.scrollHeight;
+      const isAtBottom = content.scrollHeight - content.scrollTop === content.clientHeight;
+
+      document.getElementById('output-content').textContent = data.output;
+
+      // Auto-scroll to bottom only if we were already there or it's a fresh open
+      if (!isRefresh || isAtBottom) {
+        content.scrollTop = content.scrollHeight;
+      }
     }
 
     function closeOutput() {
@@ -428,7 +435,15 @@
 
     // Auto-refresh
     fetchSessions();
-    updateInterval = setInterval(fetchSessions, 3000);
+    updateInterval = setInterval(() => {
+      fetchSessions();
+      if (currentSession) {
+        // Refresh output without resetting scroll if possible, 
+        // but for now just calling viewOutput again is the simplest way to get new data.
+        // We'll modify viewOutput to be smoother later if needed.
+        viewOutput(currentSession, true);
+      }
+    }, 3000);
   </script>
 </body>
 </html>
