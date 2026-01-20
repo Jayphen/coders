@@ -125,12 +125,19 @@ function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHea
 
     // Start heartbeat in background if enabled
     if (enableHeartbeat) {
-          try {
-            const scriptDir = path.dirname(new URL(import.meta.url).pathname);
-            const heartbeatScript = path.join(scriptDir, '../../assets/heartbeat.js');
-            execSync(`SESSION_ID="${sessionId}" nohup node ${heartbeatScript} "${sessionId}" > /dev/null 2>&1 &`);
-            log(`💓 Heartbeat enabled (dashboard will show status)`, 'green');
-          } catch (e) {        log(`⚠️  Heartbeat failed to start: ${e.message}`, 'yellow');
+      // Check if redis is available before starting heartbeat
+      if (!checkRedisDependency()) {
+        log(`⚠️  Heartbeat requires redis dependency.`, 'yellow');
+        log(`   Run 'coders dashboard' to auto-install dependencies.`, 'yellow');
+      } else {
+        try {
+          const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+          const heartbeatScript = path.join(scriptDir, '../../assets/heartbeat.js');
+          execSync(`SESSION_ID="${sessionId}" nohup node ${heartbeatScript} "${sessionId}" > /dev/null 2>&1 &`);
+          log(`💓 Heartbeat enabled (dashboard will show status)`, 'green');
+        } catch (e) {
+          log(`⚠️  Heartbeat failed to start: ${e.message}`, 'yellow');
+        }
       }
     }
 
@@ -275,13 +282,18 @@ other coder sessions. Start by spawning your first session or listing existing o
     log(`💡 Or: tmux attach -t ${sessionId}`, 'yellow');
 
     // Start heartbeat for orchestrator
-    try {
-      const scriptDir = path.dirname(new URL(import.meta.url).pathname);
-      const heartbeatScript = path.join(scriptDir, 'assets/heartbeat.js');
-      execSync(`SESSION_ID="${sessionId}" nohup node ${heartbeatScript} "${sessionId}" > /dev/null 2>&1 &`);
-      log(`💓 Heartbeat enabled for orchestrator`, 'green');
-    } catch (e) {
-      log(`⚠️  Heartbeat failed to start: ${e.message}`, 'yellow');
+    if (!checkRedisDependency()) {
+      log(`⚠️  Heartbeat requires redis dependency.`, 'yellow');
+      log(`   Run 'coders dashboard' to auto-install dependencies.`, 'yellow');
+    } else {
+      try {
+        const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+        const heartbeatScript = path.join(scriptDir, 'assets/heartbeat.js');
+        execSync(`SESSION_ID="${sessionId}" nohup node ${heartbeatScript} "${sessionId}" > /dev/null 2>&1 &`);
+        log(`💓 Heartbeat enabled for orchestrator`, 'green');
+      } catch (e) {
+        log(`⚠️  Heartbeat failed to start: ${e.message}`, 'yellow');
+      }
     }
 
     // Auto-attach to the new session only if running in a TTY
@@ -394,7 +406,55 @@ function openDashboard(url) {
   }
 }
 
+function checkRedisDependency() {
+  try {
+    // Get plugin root directory and check if redis exists in node_modules
+    const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+    const pluginRoot = path.resolve(scriptDir, '../../..');
+    const redisPath = path.join(pluginRoot, 'node_modules', 'redis');
+
+    return fs.existsSync(redisPath);
+  } catch {
+    return false;
+  }
+}
+
+async function ensureDependencies() {
+  // Check if redis is installed
+  if (checkRedisDependency()) {
+    return true;
+  }
+
+  log(`📦 Redis dependency not found. Installing dependencies...`, 'yellow');
+
+  // Get plugin root directory (go up from scripts/ -> coders/ -> skills/ -> root)
+  const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+  const pluginRoot = path.resolve(scriptDir, '../../..');
+
+  try {
+    log(`   Running npm install in ${pluginRoot}...`, 'blue');
+    execSync('npm install', {
+      cwd: pluginRoot,
+      stdio: 'inherit'
+    });
+
+    log(`✅ Dependencies installed successfully!`, 'green');
+    return true;
+  } catch (e) {
+    log(`❌ Failed to install dependencies: ${e.message}`, 'red');
+    log(`   Please run 'npm install' manually in: ${pluginRoot}`, 'yellow');
+    return false;
+  }
+}
+
 async function launchDashboard() {
+  // Ensure dependencies are installed before starting dashboard
+  const depsOk = await ensureDependencies();
+  if (!depsOk) {
+    log(`❌ Cannot start dashboard without dependencies.`, 'red');
+    return;
+  }
+
   const port = process.env.DASHBOARD_PORT || '3030';
   const url = `http://localhost:${port}`;
 
