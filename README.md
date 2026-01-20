@@ -56,14 +56,14 @@ git clone https://github.com/Jayphen/coders.git
 cd coders
 
 # Use the CLI
-./scripts/main.js spawn claude --task "Hello world"
-./scripts/main.js list
-./scripts/main.js attach my-session
+node skills/main.js spawn claude --task "Hello world"
+node skills/main.js list
+node skills/main.js attach my-session
 ```
 
 Or link the CLI:
 ```bash
-ln -sf ~/code/coders/scripts/main.js ~/bin/coders
+ln -sf ~/code/coders/skills/main.js ~/bin/coders
 coders spawn claude --task "Hello world"
 ```
 
@@ -128,7 +128,7 @@ restore();    // Restores from latest snapshot
 coders/
 ├── .claude-plugin/
 │   └── plugin.json        # Plugin manifest (Claude Code discovers this)
-├── scripts/
+├── skills/
 │   ├── main.js           # CLI entry point
 │   ├── test.js           # Test runner
 │   ├── claude-code/
@@ -136,8 +136,8 @@ coders/
 │   │   ├── coders.d.ts   # Type definitions
 │   │   └── redis.ts      # Redis heartbeat & pub/sub
 │   └── tmux-resurrect.ts # Snapshot/restore utility
-├── tsconfig.json         # TypeScript config (for IDE only)
-├── package.json          # Dependencies
+├── .gitignore
+├── package.json
 └── README.md
 ```
 

@@ -87,7 +87,7 @@
     {
       "name": "coders",
       "description": "Spawn AI coding assistants in isolated tmux sessions",
-      "file": "scripts/claude-code/coders.ts"
+      "file": "skills/claude-code/coders.ts"
     }
   ],
   "hooks": [],
