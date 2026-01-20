@@ -3,7 +3,7 @@
   "version": "1.1.1",
   "description": "Spawn AI coding assistants (Claude, Gemini, Codex, OpenCode) in isolated tmux sessions with real-time monitoring dashboard, auto-generated session names, and git worktree support",
   "author": {
-    "name": "Steve",
+    "name": "Jayphen",
     "email": "software@jayphen.com",
     "url": "https://github.com/Jayphen"
   },

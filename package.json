@@ -8,7 +8,7 @@
     "test": "node skills/coders/scripts/test.js",
     "plugin:test": "claude --plugin-dir ."
   },
-  "author": "Steve",
+  "author": "Jayphen",
   "repository": "https://github.com/Jayphen/coders",
   "keywords": [
     "claude-code",

@@ -4,7 +4,7 @@
   "version": "1.1.1",
   "description": "Coders marketplace - Spawn AI coding assistants in isolated tmux sessions with monitoring",
   "owner": {
-    "name": "Steve",
+    "name": "Jayphen",
     "email": "software@jayphen.com"
   },
   "plugins": [
@@ -15,7 +15,7 @@
       "category": "productivity",
       "version": "1.1.1",
       "author": {
-        "name": "Steve",
+        "name": "Jayphen",
         "email": "software@jayphen.com",
         "url": "https://github.com/Jayphen"
       }
