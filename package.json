@@ -29,6 +29,10 @@
     "url": "https://github.com/Jayphen/coders/issues"
   },
   "homepage": "https://github.com/Jayphen/coders#readme",
+  "dependencies": {
+    "playwright": "^1.57.0",
+    "redis": "^5.0.0"
+  },
   "devDependencies": {
     "@types/node": "^25.0.9",
     "typescript": "^5.9.3",

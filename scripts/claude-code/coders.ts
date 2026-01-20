@@ -2,6 +2,7 @@
  * Coder Spawner Skill for Claude Code
  * 
  * Spawn AI coding assistants in isolated tmux sessions with optional git worktrees.
+ * Supports Redis heartbeat, pub/sub for inter-agent communication, and auto-respawn.
  * 
  * Usage:
  * import { coders } from '@jayphen/coders';
@@ -17,6 +18,13 @@
  *   prd: 'docs/auth-prd.md'
  * });
  * 
+ * // With Redis heartbeat enabled
+ * await coders.spawn({
+ *   tool: 'claude',
+ *   task: 'Fix the bug',
+ *   redis: { url: 'redis://localhost:6379' }
+ * });
+ * 
  * // Quick helpers
  * await coders.claude('Fix the bug', { worktree: 'fix-auth' });
  * await coders.gemini('Research JWT approaches');
@@ -25,12 +33,21 @@
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  RedisManager,
+  DeadLetterListener,
+  getPaneId,
+  injectPaneIdContext,
+  RedisConfig,
+  HEARTBEAT_CHANNEL,
+  DEAD_LETTER_KEY
+} from './redis';
 
 const WORKTREE_BASE = '../worktrees';
 const SESSION_PREFIX = 'coder-';
 
 // Types
-interface SpawnOptions {
+export interface SpawnOptions {
   tool: 'claude' | 'gemini' | 'codex';
   task?: string;
   name?: string;
@@ -38,14 +55,40 @@ interface SpawnOptions {
   baseBranch?: string;
   prd?: string;
   interactive?: boolean;
+  redis?: RedisConfig;
+  enableHeartbeat?: boolean;
+  enableDeadLetter?: boolean;
+  paneId?: string;
 }
 
-interface CoderSession {
+export interface CoderSession {
   id: string;
   tool: string;
   worktree?: string;
   task: string;
   createdAt: Date;
+  paneId?: string;
+}
+
+export interface CodersConfig {
+  redis?: RedisConfig;
+  snapshotDir?: string;
+  deadLetterTimeout?: number;
+}
+
+/**
+ * Global config for coders skill
+ */
+let globalConfig: CodersConfig = {
+  snapshotDir: '~/.coders/snapshots',
+  deadLetterTimeout: 120000 // 2 minutes
+};
+
+/**
+ * Configure the coders skill globally
+ */
+export function configure(config: CodersConfig): void {
+  globalConfig = { ...globalConfig, ...config };
 }
 
 /**
@@ -99,10 +142,31 @@ function createWorktree(branchName: string, baseBranch: string = 'main'): string
 }
 
 /**
- * Build the spawn command for a tool
+ * Build the spawn command for a tool with optional pane ID injection
  */
-function buildCommand(tool: string, promptFile: string, worktreePath?: string): string {
-  const env = worktreePath ? `WORKSPACE_DIR="${worktreePath}" ` : '';
+function buildCommand(
+  tool: string, 
+  promptFile: string, 
+  worktreePath?: string,
+  paneId?: string,
+  redisConfig?: RedisConfig
+): string {
+  const envVars: string[] = [];
+  
+  if (worktreePath) {
+    envVars.push(`WORKSPACE_DIR="${worktreePath}"`);
+  }
+  
+  if (paneId) {
+    envVars.push(`CODERS_PANE_ID="${paneId}"`);
+    envVars.push(`CODERS_SESSION_ID="${SESSION_PREFIX}${tool}-${Date.now()}"`);
+  }
+  
+  if (redisConfig?.url) {
+    envVars.push(`REDIS_URL="${redisConfig.url}"`);
+  }
+  
+  const env = envVars.length > 0 ? envVars.join(' ') + ' ' : '';
   
   if (tool === 'claude' || tool === 'claude-code') {
     return `${env}claude --dangerously-spawn-permission -f "${promptFile}"`;
@@ -115,10 +179,17 @@ function buildCommand(tool: string, promptFile: string, worktreePath?: string): 
 }
 
 /**
- * Generate a prompt file with task and context
+ * Generate a prompt file with task, context, and pane ID injection
  */
-function createPrompt(task: string, contextFiles?: string[]): string {
-  let prompt = `TASK: ${task}\n\n`;
+function createPrompt(task: string, contextFiles?: string[], paneId?: string, redisConfig?: RedisConfig): string {
+  let prompt = '';
+  
+  // Inject pane ID context if provided
+  if (paneId) {
+    prompt += injectPaneIdContext('', paneId);
+  }
+  
+  prompt += `TASK: ${task}\n\n`;
   
   if (contextFiles && contextFiles.length > 0) {
     prompt += 'CONTEXT:\n';
@@ -131,7 +202,42 @@ function createPrompt(task: string, contextFiles?: string[]): string {
     prompt += '\n';
   }
   
+  // Add Redis info to prompt if configured
+  if (redisConfig?.url) {
+    prompt += `
+<!-- REDIS CONFIG -->
+<!-- HEARTBEAT_CHANNEL: ${HEARTBEAT_CHANNEL} -->
+<!-- DEAD_LETTER_KEY: ${DEAD_LETTER_KEY} -->
+
+Redis is configured for this session. Publish heartbeats to enable
+auto-respawn if you become unresponsive for >2 minutes.
+
+Heartbeat format:
+{
+  "paneId": "${paneId || '<your-pane-id)'}",
+  "status": "alive",
+  "timestamp": Date.now()
+}
+
+Publish to Redis channel: ${HEARTBEAT_CHANNEL}
+`;
+  }
+  
   return prompt;
+}
+
+/**
+ * Start the dead-letter listener for a session
+ */
+function startDeadLetterListener(redisConfig: RedisConfig): DeadLetterListener | null {
+  if (!redisConfig?.url) return null;
+  
+  const listener = new DeadLetterListener(redisConfig);
+  listener.start().catch(e => {
+    console.error('Failed to start dead-letter listener:', e);
+  });
+  
+  return listener;
 }
 
 /**
@@ -145,7 +251,11 @@ export async function spawn(options: SpawnOptions): Promise<string> {
     worktree, 
     baseBranch = 'main', 
     prd,
-    interactive = true 
+    interactive = true,
+    redis: redisConfig,
+    enableHeartbeat = !!redisConfig?.url,
+    enableDeadLetter = !!redisConfig?.url,
+    paneId: providedPaneId
   } = options;
   
   if (!task) {
@@ -154,6 +264,7 @@ export async function spawn(options: SpawnOptions): Promise<string> {
   
   const sessionName = name || `${tool}-${Date.now()}`;
   const sessionId = `${SESSION_PREFIX}${sessionName}`;
+  const paneId = providedPaneId || getPaneId();
   
   // Create worktree if requested
   let worktreePath: string | undefined;
@@ -168,26 +279,49 @@ export async function spawn(options: SpawnOptions): Promise<string> {
     }
   }
   
-  // Build prompt with optional PRD
+  // Build prompt with optional PRD and Redis context
   const contextFiles = prd ? [prd] : [];
-  const prompt = createPrompt(task, contextFiles);
+  const prompt = createPrompt(task, contextFiles, paneId, redisConfig);
   const promptFile = `/tmp/coders-prompt-${Date.now()}.txt`;
   fs.writeFileSync(promptFile, prompt);
   
-  // Build and run command
-  const cmd = buildCommand(tool, promptFile, worktreePath);
+  // Build command with environment variables
+  const cmd = buildCommand(tool, promptFile, worktreePath, paneId, redisConfig);
+  
+  // Start dead-letter listener if enabled
+  let deadLetterListener: DeadLetterListener | null = null;
+  if (enableDeadLetter && redisConfig) {
+    deadLetterListener = startDeadLetterListener(redisConfig);
+  }
   
   try {
+    // Clean up existing session if any
     try { execSync(`tmux kill-session -t ${sessionId}`); } catch {}
+    
+    // Create new tmux session
     execSync(`tmux new-session -s "${sessionId}" -d "${cmd}"`);
+    
+    // Store pane info for Redis if configured
+    if (redisConfig?.url) {
+      const redis = new RedisManager(redisConfig);
+      await redis.connect();
+      await redis.setPaneId(paneId);
+      if (enableHeartbeat) {
+        redis.startHeartbeat();
+      }
+    }
     
     return `
 🤖 Spawned **${tool}** in new tmux window!
 
 **Session:** ${sessionId}
+**Pane ID:** ${paneId}
 **Worktree:** ${worktreePath || 'main repo'}
 **Task:** ${task}
 **PRD:** ${prd || 'none'}
+**Redis:** ${redisConfig?.url || 'disabled'}
+**Heartbeat:** ${enableHeartbeat ? 'enabled' : 'disabled'}
+**Auto-Respawn:** ${enableDeadLetter ? 'enabled (2min timeout)' : 'disabled'}
 
 To attach:
 \`coders attach ${sessionName}\`
@@ -243,21 +377,42 @@ export function kill(sessionName: string): string {
  */
 export async function claude(
   task: string,
-  options?: { name?: string; worktree?: string; prd?: string }
+  options?: { 
+    name?: string; 
+    worktree?: string; 
+    prd?: string;
+    redis?: RedisConfig;
+    enableHeartbeat?: boolean;
+    enableDeadLetter?: boolean;
+  }
 ): Promise<string> {
   return spawn({ tool: 'claude', task, ...options });
 }
 
 export async function gemini(
   task: string,
-  options?: { name?: string; worktree?: string; prd?: string }
+  options?: { 
+    name?: string; 
+    worktree?: string; 
+    prd?: string;
+    redis?: RedisConfig;
+    enableHeartbeat?: boolean;
+    enableDeadLetter?: boolean;
+  }
 ): Promise<string> {
   return spawn({ tool: 'gemini', task, ...options });
 }
 
 export async function codex(
   task: string,
-  options?: { name?: string; worktree?: string; prd?: string }
+  options?: { 
+    name?: string; 
+    worktree?: string; 
+    prd?: string;
+    redis?: RedisConfig;
+    enableHeartbeat?: boolean;
+    enableDeadLetter?: boolean;
+  }
 ): Promise<string> {
   return spawn({ tool: 'codex', task, ...options });
 }
@@ -268,13 +423,22 @@ export async function codex(
 export async function worktree(
   branchName: string,
   task: string,
-  options?: { tool?: 'claude' | 'gemini' | 'codex'; prd?: string }
+  options?: { 
+    tool?: 'claude' | 'gemini' | 'codex'; 
+    prd?: string;
+    redis?: RedisConfig;
+    enableHeartbeat?: boolean;
+    enableDeadLetter?: boolean;
+  }
 ): Promise<string> {
   return spawn({ 
     tool: options?.tool || 'claude', 
     task, 
     worktree: branchName, 
-    prd: options?.prd 
+    prd: options?.prd,
+    redis: options?.redis,
+    enableHeartbeat: options?.enableHeartbeat,
+    enableDeadLetter: options?.enableDeadLetter
   });
 }
 
@@ -301,10 +465,61 @@ export function getActiveSessions(): CoderSession[] {
 }
 
 /**
+ * Spawn with Redis heartbeat enabled
+ */
+export async function spawnWithHeartbeat(
+  options: SpawnOptions
+): Promise<string> {
+  return spawn({
+    ...options,
+    redis: options.redis || globalConfig.redis,
+    enableHeartbeat: true,
+    enableDeadLetter: true
+  });
+}
+
+/**
+ * Send message to another agent via Redis pub/sub
+ */
+export async function sendMessage(
+  channel: string,
+  message: any,
+  redisConfig?: RedisConfig
+): Promise<void> {
+  const config = redisConfig || globalConfig.redis;
+  if (!config?.url) {
+    throw new Error('Redis not configured. Pass redis config or set global config.');
+  }
+  
+  const redis = new RedisManager(config);
+  await redis.connect();
+  await redis.publishMessage(channel, message);
+  await redis.disconnect();
+}
+
+/**
+ * Listen for messages from other agents via Redis pub/sub
+ */
+export async function listenForMessages(
+  channel: string,
+  callback: (message: any) => void,
+  redisConfig?: RedisConfig
+): Promise<void> {
+  const config = redisConfig || globalConfig.redis;
+  if (!config?.url) {
+    throw new Error('Redis not configured. Pass redis config or set global config.');
+  }
+  
+  const redis = new RedisManager(config);
+  await redis.subscribeToChannel(channel, callback);
+}
+
+/**
  * Main export with all functions
  */
 export const coders = {
   spawn,
+  spawnWithHeartbeat,
   list,
   attach,
   kill,
@@ -313,7 +528,17 @@ export const coders = {
   codex,
   worktree,
   createWorktree,
-  getActiveSessions
+  getActiveSessions,
+  configure,
+  sendMessage,
+  listenForMessages,
+  // Re-export from redis.ts
+  RedisManager,
+  DeadLetterListener,
+  getPaneId,
+  injectPaneIdContext,
+  HEARTBEAT_CHANNEL,
+  DEAD_LETTER_KEY
 };
 
 export default coders;
