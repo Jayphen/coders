@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-import { createClient } from 'redis';
-
 const ORCHESTRATOR_SESSION_ID = 'coder-orchestrator';
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const ORCHESTRATOR_KEY = 'coders:orchestrator:meta';
@@ -9,13 +7,19 @@ const ORCHESTRATOR_KEY = 'coders:orchestrator:meta';
 let redisClient = null;
 
 /**
- * Get or create Redis client
+ * Get or create Redis client (with dynamic import)
  */
 async function getRedisClient() {
   if (!redisClient) {
-    redisClient = createClient({ url: REDIS_URL });
-    redisClient.on('error', (err) => console.error('[Redis] Error:', err));
-    await redisClient.connect();
+    try {
+      // Use dynamic import to avoid top-level import errors
+      const { createClient } = await import('redis');
+      redisClient = createClient({ url: REDIS_URL });
+      redisClient.on('error', (err) => console.error('[Redis] Error:', err));
+      await redisClient.connect();
+    } catch (err) {
+      throw new Error(`Failed to load redis: ${err.message}`);
+    }
   }
   return redisClient;
 }

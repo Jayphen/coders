@@ -288,7 +288,7 @@ other coder sessions. Start by spawning your first session or listing existing o
     } else {
       try {
         const scriptDir = path.dirname(new URL(import.meta.url).pathname);
-        const heartbeatScript = path.join(scriptDir, 'assets/heartbeat.js');
+        const heartbeatScript = path.join(scriptDir, '../../assets/heartbeat.js');
         execSync(`SESSION_ID="${sessionId}" nohup node ${heartbeatScript} "${sessionId}" > /dev/null 2>&1 &`);
         log(`💓 Heartbeat enabled for orchestrator`, 'green');
       } catch (e) {

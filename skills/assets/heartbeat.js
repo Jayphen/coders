@@ -7,8 +7,6 @@
  * Run this in the background within each coder session.
  */
 
-import { createClient } from 'redis';
-
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const HEARTBEAT_CHANNEL = 'coders:heartbeats';
 const PANE_KEY_PREFIX = 'coders:pane:';
@@ -25,10 +23,17 @@ if (!sessionId) {
 let client;
 
 async function connect() {
-  client = createClient({ url: REDIS_URL });
-  client.on('error', (err) => console.error('[Heartbeat] Redis error:', err.message));
-  await client.connect();
-  console.log(`[Heartbeat] Connected to Redis for session: ${sessionId}`);
+  try {
+    // Use dynamic import to avoid top-level import errors
+    const { createClient } = await import('redis');
+    client = createClient({ url: REDIS_URL });
+    client.on('error', (err) => console.error('[Heartbeat] Redis error:', err.message));
+    await client.connect();
+    console.log(`[Heartbeat] Connected to Redis for session: ${sessionId}`);
+  } catch (err) {
+    console.error('[Heartbeat] Failed to load redis module:', err.message);
+    throw err;
+  }
 }
 
 async function publishHeartbeat() {

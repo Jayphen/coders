@@ -8,7 +8,6 @@
  */
 
 import http from 'http';
-import { createClient } from 'redis';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -81,18 +80,26 @@ function getFormattedSessionList() {
   });
 }
 
-// Connect to Redis
+// Connect to Redis (with dynamic import)
 async function connectRedis() {
-  redisClient = createClient({ url: REDIS_URL });
-  redisSubscriber = redisClient.duplicate();
+  try {
+    // Use dynamic import to avoid top-level import errors
+    const { createClient } = await import('redis');
 
-  redisClient.on('error', (err) => console.error('[Redis] Error:', err));
-  redisSubscriber.on('error', (err) => console.error('[Redis Sub] Error:', err));
+    redisClient = createClient({ url: REDIS_URL });
+    redisSubscriber = redisClient.duplicate();
 
-  await redisClient.connect();
-  await redisSubscriber.connect();
+    redisClient.on('error', (err) => console.error('[Redis] Error:', err));
+    redisSubscriber.on('error', (err) => console.error('[Redis Sub] Error:', err));
 
-  console.log('[Redis] Connected to', REDIS_URL);
+    await redisClient.connect();
+    await redisSubscriber.connect();
+
+    console.log('[Redis] Connected to', REDIS_URL);
+  } catch (err) {
+    console.error('[Redis] Failed to load redis module:', err.message);
+    throw err;
+  }
 }
 
 // Subscribe to heartbeats
