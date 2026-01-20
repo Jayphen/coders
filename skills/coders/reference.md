@@ -18,7 +18,6 @@ Spawn a new AI coding assistant in an isolated tmux session.
 - `options.interactive` (optional): Whether to run interactively (default: `true`)
 - `options.redis` (optional): Redis configuration object
 - `options.enableHeartbeat` (optional): Enable Redis heartbeat (default: `false`)
-- `options.enableDeadLetter` (optional): Enable auto-respawn on timeout (default: `false`)
 - `options.paneId` (optional): Tmux pane ID for coordination
 
 **Returns:** `Promise<string>` - Success message with session details
@@ -152,7 +151,6 @@ Quick helper to spawn with a git worktree.
   - `prd`: Path to PRD file
   - `redis`: Redis configuration
   - `enableHeartbeat`: Enable heartbeat
-  - `enableDeadLetter`: Enable auto-respawn
 
 **Returns:** `Promise<string>`
 
@@ -193,14 +191,12 @@ Configure global plugin settings.
 **Parameters:**
 - `config.redis` (optional): Default Redis configuration
 - `config.snapshotDir` (optional): Directory for snapshots (default: `~/.coders/snapshots`)
-- `config.deadLetterTimeout` (optional): Timeout in ms (default: `120000`)
 
 **Example:**
 ```typescript
 coders.configure({
   redis: { url: 'redis://localhost:6379' },
-  snapshotDir: '~/my-snapshots',
-  deadLetterTimeout: 180000 // 3 minutes
+  snapshotDir: '~/my-snapshots'
 });
 ```
 
@@ -213,7 +209,7 @@ coders.configure({
 Spawn a session with Redis heartbeat enabled.
 
 **Parameters:**
-- Same as `spawn()`, but `enableHeartbeat` and `enableDeadLetter` are set to `true`
+- Same as `spawn()`, but `enableHeartbeat` is set to `true`
 
 **Returns:** `Promise<string>`
 
@@ -308,30 +304,20 @@ Low-level Redis client manager.
 
 **Methods:**
 - `connect()`: Connect to Redis
-- `disconnect()`: Disconnect from Redis
+- `disconnect()`: Disconnect from Redis (also cleans up all subscribers)
 - `setPaneId(paneId)`: Store pane ID
 - `getPaneId()`: Retrieve pane ID
 - `publishMessage(channel, message)`: Publish message
 - `subscribeToChannel(channel, callback)`: Subscribe to channel
+- `unsubscribe(channel)`: Unsubscribe from channel and close connection
 - `startHeartbeat()`: Start heartbeat publishing
 - `stopHeartbeat()`: Stop heartbeat publishing
-
----
-
-### `DeadLetterListener`
-
-Auto-respawn listener for dead agents.
-
-**Methods:**
-- `start()`: Start listening for dead agents
-- `stop()`: Stop listening
 
 ---
 
 ## Constants
 
 - `HEARTBEAT_CHANNEL`: Default Redis channel for heartbeats
-- `DEAD_LETTER_KEY`: Default Redis key for dead letter queue
 - `SESSION_PREFIX`: Tmux session name prefix (`'coder-'`)
 - `WORKTREE_BASE`: Default worktree location (`'../worktrees'`)
 
@@ -351,7 +337,6 @@ interface SpawnOptions {
   interactive?: boolean;
   redis?: RedisConfig;
   enableHeartbeat?: boolean;
-  enableDeadLetter?: boolean;
   paneId?: string;
 }
 ```
@@ -380,6 +365,5 @@ interface CoderSession {
 interface CodersConfig {
   redis?: RedisConfig;
   snapshotDir?: string;
-  deadLetterTimeout?: number;
 }
 ```

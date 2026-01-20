@@ -89,7 +89,7 @@ coders spawn claude --task "Hello world"
 - **Git Worktrees**: Creates isolated branches for each task
 - **PRD Priming**: Feeds context to the AI before it starts
 - **Tmux Sessions**: Runs in separate tmux windows
-- **Redis Heartbeat**: Auto-respawn dead panes, pub/sub for inter-agent communication
+- **Redis Heartbeat**: Session monitoring, pub/sub for inter-agent communication
 - **Tmux Resurrect**: Snapshot/restore entire swarm
 
 <img width="1505" height="1331" alt="Dashboard" src="https://github.com/user-attachments/assets/a9f46996-670c-4e13-975c-d8e381aaa0ab" />
@@ -121,24 +121,23 @@ sleep 0.5  # Let TUI process input
 tmux send-keys -t SESSION C-m  # Submit
 ```
 
-### Redis Heartbeat & Auto-Respawn
+### Redis Heartbeat & Monitoring
 
-Enable Redis for heartbeat monitoring and auto-respawn:
+Enable Redis for heartbeat monitoring and inter-agent communication:
 
 ```typescript
 await coders.spawn({
   tool: 'claude',
   task: 'Build auth module',
   redis: { url: 'redis://localhost:6379' },
-  enableHeartbeat: true,
-  enableDeadLetter: true
+  enableHeartbeat: true
 });
 ```
 
 This will:
-- Publish heartbeats every 10s to Redis
-- Auto-respawn panes that miss 2 heartbeats (2min timeout)
+- Publish heartbeats every 30s to Redis for dashboard monitoring
 - Enable inter-agent pub/sub communication
+- Clean up resources automatically when sessions end
 
 ### Inter-Agent Communication
 

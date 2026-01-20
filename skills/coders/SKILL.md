@@ -47,7 +47,6 @@ Press `Ctrl+B` then `D` to detach.
 🌲 **Git Worktrees**: Isolate work in separate branches without switching
 🔄 **Session Persistence**: Save and restore sessions across reboots
 📡 **Redis Coordination**: Inter-agent messaging and heartbeat monitoring
-🤖 **Auto-Respawn**: Automatically restart unresponsive agents
 📊 **Web Dashboard**: Monitor all sessions in real-time
 🎯 **Smart Naming**: Auto-generate session names from task descriptions
 
@@ -116,7 +115,7 @@ All commands use the skill syntax:
 
 ## Redis Coordination
 
-Enable Redis for inter-agent messaging and auto-respawn:
+Enable Redis for inter-agent messaging and monitoring:
 
 ```bash
 /coders:spawn claude --task "Build frontend" --redis redis://localhost:6379 --enable-heartbeat
@@ -124,8 +123,8 @@ Enable Redis for inter-agent messaging and auto-respawn:
 
 Agents can:
 - Send messages to each other via pub/sub
-- Publish heartbeats for monitoring
-- Auto-respawn if they become unresponsive (>2min timeout)
+- Publish heartbeats for dashboard monitoring
+- Resources are automatically cleaned up when sessions end
 
 ## Documentation
 
@@ -184,7 +183,6 @@ tmux capture-pane -t coder-SESSION_ID -p | tail -20
 - `--prd` - PRD/spec file path to include as context (optional)
 - `--redis` - Redis URL for coordination (optional)
 - `--enable-heartbeat` - Enable heartbeat publishing (optional)
-- `--enable-dead-letter` - Enable auto-respawn on timeout (optional)
 
 ## Requirements
 

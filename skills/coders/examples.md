@@ -299,8 +299,7 @@ await coders.spawn({
   worktree: 'feature/dashboard',
   prd: 'docs/dashboard-spec.md',
   redis: { url: 'redis://localhost:6379' },
-  enableHeartbeat: true,
-  enableDeadLetter: true
+  enableHeartbeat: true
 });
 
 // List and manage
