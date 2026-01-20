@@ -47,7 +47,7 @@ coders.attach('session-name');
 coders.kill('session-name');
 ```
 
-### 2. Standalone CLI
+### 2. Standalone CLI (Optional)
 
 ```bash
 # Clone and use directly
@@ -55,15 +55,24 @@ cd ~/code
 git clone https://github.com/Jayphen/coders.git
 cd coders
 
-# Use the CLI
-node skills/main.js spawn claude --task "Hello world"
-node skills/main.js list
-node skills/main.js attach my-session
+# Optional (required for dashboard/Redis features)
+npm install
+
+# Use the CLI via the bundled wrapper
+./bin/coders spawn claude --task "Hello world"
+./bin/coders list
+./bin/coders attach my-session
 ```
 
-Or link the CLI:
+Add it to your PATH:
 ```bash
-ln -sf ~/code/coders/skills/main.js ~/bin/coders
+export PATH="$PATH:$HOME/code/coders/bin"
+coders spawn claude --task "Hello world"
+```
+
+Or symlink it:
+```bash
+ln -sf ~/code/coders/bin/coders ~/bin/coders
 coders spawn claude --task "Hello world"
 ```
 
@@ -164,10 +173,11 @@ coders/
 │   ├── snapshot.md
 │   └── restore.md
 ├── skills/
-│   ├── main.js            # CLI entry point
-│   ├── test.js            # Test runner
 │   ├── assets/            # Runtime assets (dashboard, heartbeat)
 │   └── coders/
+│       ├── scripts/
+│       │   ├── main.js          # CLI entry point
+│       │   └── orchestrator.js  # Orchestrator state helpers
 │       ├── SKILL.md       # Skill definition (required for discovery)
 │       ├── coders.ts      # Claude Code skill (TypeScript, loaded directly)
 │       ├── coders.d.ts    # Type definitions

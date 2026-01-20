@@ -8,6 +8,10 @@ Execute:
 ```bash
 node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js spawn $ARGUMENTS
 ```
+CLI alternative:
+```bash
+./bin/coders spawn $ARGUMENTS
+```
 
 Spawn Claude, Gemini, Codex, or OpenCode in an isolated tmux window with optional git worktree.
 
@@ -52,7 +56,7 @@ tmux attach -t coder-SESSION_ID
 ### Send messages remotely
 ```bash
 # Using helper script
-./scripts/send-to-session.sh coder-SESSION_ID "your message"
+./bin/send-to-session.sh coder-SESSION_ID "your message"
 
 # Manually (two-step required for TUI CLIs)
 tmux send-keys -t coder-SESSION_ID "your message"

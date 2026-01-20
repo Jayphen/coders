@@ -8,6 +8,10 @@ Execute:
 ```bash
 node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js restore
 ```
+CLI alternative:
+```bash
+./bin/coders restore
+```
 
 Restore tmux sessions from the latest snapshot.
 

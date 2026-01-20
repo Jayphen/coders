@@ -12,11 +12,15 @@ The orchestrator is a special persistent session that can be used to coordinate 
 ```bash
 coders orchestrator
 ```
+CLI alternative:
+```bash
+./bin/coders orchestrator
+```
 
 ## Features
 
 - **Persistent Session ID**: Uses `coder-orchestrator` (not timestamp-based)
-- **State Management**: Tracks orchestrator state in `~/.coders/orchestrator.json`
+- **State Management**: Tracks orchestrator state in Redis (key: `coders:orchestrator:meta`)
 - **Special Capabilities**: Can spawn and kill other coder sessions
 - **Dashboard Integration**: Displayed at the top of the dashboard with special styling
 

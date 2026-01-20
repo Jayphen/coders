@@ -16,6 +16,11 @@ Spawn and manage AI coding assistants in isolated tmux sessions with optional gi
 node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js spawn claude --task "Implement OAuth authentication"
 ```
 
+CLI alternative (outside Claude Code):
+```bash
+./bin/coders spawn claude --task "Implement OAuth authentication"
+```
+
 ### With a git worktree
 
 ```bash

@@ -8,6 +8,10 @@ Execute:
 ```bash
 node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js snapshot
 ```
+CLI alternative:
+```bash
+./bin/coders snapshot
+```
 
 Save a snapshot of all tmux sessions to ~/.coders/snapshots/
 

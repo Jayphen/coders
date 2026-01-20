@@ -8,6 +8,10 @@ Execute:
 ```bash
 node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js dashboard
 ```
+CLI alternative:
+```bash
+./bin/coders dashboard
+```
 
 Starts the dashboard server if it is not already running and opens it in your browser.
 

@@ -1,6 +1,6 @@
 # Coders API Reference
 
-Complete API documentation for the Coders plugin.
+Complete API documentation for the Coders plugin. If you're launching from the terminal instead of Claude Code, use the CLI wrapper: `./bin/coders <command>`.
 
 ## Core Functions
 

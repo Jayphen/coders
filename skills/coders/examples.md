@@ -2,6 +2,8 @@
 
 Practical examples for common workflows using the Coders plugin.
 
+Note: Examples use Claude Code slash commands. CLI alternative: replace `/coders:<command>` with `./bin/coders <command>` (or `coders <command>` if `bin/` is on your PATH).
+
 ## Basic Usage
 
 ### Spawn a Simple Claude Session
