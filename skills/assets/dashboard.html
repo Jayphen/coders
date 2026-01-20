@@ -504,6 +504,10 @@
           <div class="orchestrator-stat-label">Windows</div>
           <div class="orchestrator-stat-value" id="orchestrator-windows">0</div>
         </div>
+        <div class="orchestrator-stat">
+          <div class="orchestrator-stat-label">Working Directory</div>
+          <div class="orchestrator-stat-value" id="orchestrator-cwd" title="">📁 unknown</div>
+        </div>
       </div>
 
       <div class="orchestrator-controls">
@@ -590,6 +594,10 @@
         document.getElementById('orchestrator-last-response').textContent = responseSince;
         document.getElementById('orchestrator-activity').textContent = orchestrator.lastActivity;
         document.getElementById('orchestrator-windows').textContent = orchestrator.windows;
+
+        const cwdEl = document.getElementById('orchestrator-cwd');
+        cwdEl.textContent = '📁 ' + truncatePath(orchestrator.cwd);
+        cwdEl.title = orchestrator.cwd || '';
       } else {
         orchestratorPanel.classList.add('hidden');
       }
@@ -652,7 +660,7 @@
               <div>Last response: ${responseSince} ${typingIndicator}</div>
               <div>Windows: ${session.windows}</div>
               <div>Activity: ${session.lastActivity}</div>
-              ${session.paneId ? `<div>Pane ID: ${session.paneId}</div>` : ''}
+              ${session.cwd ? `<div title="${session.cwd}">📁 ${truncatePath(session.cwd)}</div>` : ''}
             </div>
             <div class="actions">
               <button onclick="viewOutput('${session.sessionId}')">View Output</button>
@@ -678,6 +686,22 @@
       if (minutes < 60) return `${minutes}m ago`;
       const hours = Math.floor(minutes / 60);
       return `${hours}h ago`;
+    }
+
+    function truncatePath(path) {
+      if (!path) return 'unknown';
+      const maxLen = 45;
+      if (path.length <= maxLen) return path;
+      // Replace home directory with ~
+      const home = path.match(/^\/Users\/[^/]+/) || path.match(/^\/home\/[^/]+/);
+      const normalized = home ? path.replace(home[0], '~') : path;
+      if (normalized.length <= maxLen) return normalized;
+      // Show .../ + last 2 path components
+      const parts = normalized.split('/');
+      if (parts.length > 2) {
+        return '.../' + parts.slice(-2).join('/');
+      }
+      return normalized.slice(-maxLen);
     }
 
     const ansiUp = new AnsiUp();

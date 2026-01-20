@@ -68,7 +68,8 @@ function getFormattedSessionList() {
       lastResponseAt: responseState?.lastResponseAt || heartbeat?.lastResponseAt || null,
       paneId: heartbeat?.paneId || null,
       lastActivity: heartbeat?.lastActivity || 'unknown',
-      isOrchestrator: isOrchestrator
+      isOrchestrator: isOrchestrator,
+      cwd: getSessionCwd(tmux.sessionId)
     };
   });
 
@@ -143,6 +144,19 @@ async function loadInitialState() {
     console.log(`[Redis] Loaded ${keys.length} sessions from cache`);
   } catch (e) {
     console.error('[Initial Load] Failed to list keys:', e);
+  }
+}
+
+// Get session current working directory
+function getSessionCwd(sessionId) {
+  try {
+    const output = execSync(
+      `tmux display-message -t ${sessionId} -p "#{pane_current_path}" 2>/dev/null || echo ""`,
+      { encoding: 'utf8' }
+    );
+    return output.trim() || null;
+  } catch (e) {
+    return null;
   }
 }
 
