@@ -1,95 +1,21 @@
 {
+  "$schema": "https://code.claude.com/schemas/plugin.json",
   "name": "coders",
   "displayName": "Coder Spawner",
   "version": "1.0.0",
   "description": "Spawn AI coding assistants (Claude, Gemini, Codex, OpenCode) in isolated tmux sessions with optional git worktrees",
-  "author": "Steve",
+  "author": {
+    "name": "Steve",
+    "email": "steve@example.com",
+    "url": "https://github.com/Jayphen"
+  },
+  "homepage": "https://github.com/Jayphen/coders",
   "repository": "https://github.com/Jayphen/coders",
   "license": "MIT",
-  "capabilities": [
-    "slashCommand",
-    "skill"
-  ],
-  "slashCommands": [
-    {
-      "name": "spawn",
-      "description": "Spawn an AI coding assistant in a new tmux session",
-      "arguments": [
-        {
-          "name": "tool",
-          "description": "AI tool to spawn (claude, gemini, codex, opencode)",
-          "required": false,
-          "enum": ["claude", "gemini", "codex", "opencode"]
-        },
-        {
-          "name": "task",
-          "description": "Task description for the AI",
-          "required": false
-        },
-        {
-          "name": "worktree",
-          "description": "Git branch for worktree (optional)",
-          "required": false
-        },
-        {
-          "name": "name",
-          "description": "Custom session name",
-          "required": false
-        },
-        {
-          "name": "prd",
-          "description": "PRD/spec file path",
-          "required": false
-        },
-        {
-          "name": "redis",
-          "description": "Redis URL for heartbeat/pub/sub",
-          "required": false
-        }
-      ]
-    },
-    {
-      "name": "list",
-      "description": "List all active coder sessions"
-    },
-    {
-      "name": "attach",
-      "description": "Attach to a coder session",
-      "arguments": [
-        {
-          "name": "session",
-          "description": "Session name to attach to",
-          "required": true
-        }
-      ]
-    },
-    {
-      "name": "kill",
-      "description": "Kill a coder session",
-      "arguments": [
-        {
-          "name": "session",
-          "description": "Session name to kill",
-          "required": true
-        }
-      ]
-    },
-    {
-      "name": "snapshot",
-      "description": "Save a snapshot of all tmux sessions"
-    },
-    {
-      "name": "restore",
-      "description": "Restore tmux sessions from snapshot"
-    }
-  ],
-  "skills": [
-    {
-      "name": "coders",
-      "description": "Spawn AI coding assistants in isolated tmux sessions",
-      "file": "skills/claude-code/coders.ts"
-    }
-  ],
-  "hooks": [],
-  "mcpServers": []
+  "keywords": ["ai", "claude", "gemini", "codex", "opencode", "spawn", "tmux", "coding"],
+  "commands": "./skills/commands",
+  "agents": "./skills/agents",
+  "skills": "./skills/claude-code",
+  "hooks": "./skills/hooks.json",
+  "mcpServers": "./skills/mcp-config.json"
 }
