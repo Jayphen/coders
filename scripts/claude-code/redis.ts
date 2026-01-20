@@ -10,8 +10,8 @@ import { execSync, spawn, ChildProcess } from 'child_process';
 import * as os from 'os';
 
 const SNAPSHOT_DIR = os.homedir() + '/.coders/snapshots';
-const HEARTBEAT_CHANNEL = 'coders:heartbeats';
-const DEAD_LETTER_KEY = 'coders:dead-letter';
+export const HEARTBEAT_CHANNEL = 'coders:heartbeats';
+export const DEAD_LETTER_KEY = 'coders:dead-letter';
 const PANE_ID_KEY_PREFIX = 'coders:pane:';
 
 // Types
@@ -90,7 +90,7 @@ await redis.publish('${HEARTBEAT_CHANNEL}', JSON.stringify({
 }
 
 export class RedisManager {
-  private client: RedisClientType | null = null;
+  private client!: RedisClientType;
   private config: RedisConfig;
   private paneId: string;
   private heartbeatInterval: NodeJS.Timeout | null = null;
@@ -132,6 +132,13 @@ export class RedisManager {
     if (this.client?.isOpen) {
       await this.client.quit();
     }
+  }
+
+  /**
+   * Get the Redis client (public accessor)
+   */
+  getClient(): RedisClientType | undefined {
+    return this.client;
   }
 
   /**
@@ -292,7 +299,8 @@ export class DeadLetterListener {
 
     const checkInterval = setInterval(async () => {
       try {
-        const deadPane = await this.redisManager.client?.blPop(DEAD_LETTER_KEY, 0);
+        const client = this.redisManager.getClient();
+        const deadPane = await client?.blPop(DEAD_LETTER_KEY, 0);
         
         if (deadPane?.element) {
           await this.handleDeadPane(deadPane.element);

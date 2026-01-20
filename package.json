@@ -1,22 +1,22 @@
 {
   "name": "@jayphen/coders",
   "version": "1.0.0",
-  "description": "Spawn AI coding assistants in isolated tmux sessions - CLI + Claude Code Skill",
-  "main": "dist/claude-code/coders.js",
-  "types": "dist/claude-code/coders.d.ts",
+  "description": "Spawn AI coding assistants in isolated tmux sessions - Claude Code Plugin + CLI",
+  "main": "scripts/claude-code/coders.ts",
+  "types": "scripts/claude-code/coders.d.ts",
   "scripts": {
-    "build": "tsc",
-    "test": "node scripts/test.js",
-    "test:unit": "tsc && node dist/claude-code/coders.test.js"
+    "test": "node scripts/test.js"
   },
   "author": "Steve",
   "repository": "https://github.com/Jayphen/coders",
   "keywords": [
     "claude-code",
+    "claude-code-plugin",
     "ai",
     "claude",
     "gemini",
     "codex",
+    "opencode",
     "spawn",
     "tmux"
   ],
@@ -24,18 +24,15 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/Jayphen/coders/issues"
   },
   "homepage": "https://github.com/Jayphen/coders#readme",
-  "dependencies": {
-    "playwright": "^1.57.0",
-    "redis": "^5.0.0"
-  },
   "devDependencies": {
-    "@types/node": "^25.0.9",
-    "typescript": "^5.9.3",
-    "vitest": "^1.0.0"
+    "@types/node": "^20.0.0"
+  },
+  "optionalDependencies": {
+    "redis": "^5.0.0"
   }
 }

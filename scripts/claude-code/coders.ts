@@ -48,7 +48,7 @@ const SESSION_PREFIX = 'coder-';
 
 // Types
 export interface SpawnOptions {
-  tool: 'claude' | 'gemini' | 'codex';
+  tool: 'claude' | 'gemini' | 'codex' | 'opencode';
   task?: string;
   name?: string;
   worktree?: string;
@@ -174,6 +174,8 @@ function buildCommand(
     return `${env}gemini -f "${promptFile}"`;
   } else if (tool === 'codex') {
     return `${env}codex -f "${promptFile}"`;
+  } else if (tool === 'opencode') {
+    return `${env}opencode -f "${promptFile}"`;
   }
   throw new Error(`Unknown tool: ${tool}`);
 }
@@ -417,6 +419,20 @@ export async function codex(
   return spawn({ tool: 'codex', task, ...options });
 }
 
+export async function opencode(
+  task: string,
+  options?: { 
+    name?: string; 
+    worktree?: string; 
+    prd?: string;
+    redis?: RedisConfig;
+    enableHeartbeat?: boolean;
+    enableDeadLetter?: boolean;
+  }
+): Promise<string> {
+  return spawn({ tool: 'opencode', task, ...options });
+}
+
 /**
  * Alias for spawn with worktree - quick syntax
  */
@@ -526,6 +542,7 @@ export const coders = {
   claude,
   gemini,
   codex,
+  opencode,
   worktree,
   createWorktree,
   getActiveSessions,

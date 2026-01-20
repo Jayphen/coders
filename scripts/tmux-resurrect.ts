@@ -158,7 +158,7 @@ function getPaneCwd(sessionName: string, paneId: string): string {
  */
 function getPaneEnv(sessionName: string, paneId: string, varName: string): string {
   try {
-    return execSync(`tmux show-environment -t "${sessionName}:${paneId}" -g "${varName}" 2>/dev/null || echo ""`, { encoding: 'utf8'' }).trim();
+    return execSync(`tmux show-environment -t "${sessionName}:${paneId}" -g "${varName}" 2>/dev/null || echo ""`, { encoding: 'utf8' }).trim();
   } catch {
     return '';
   }

@@ -3,6 +3,7 @@
  * Coder Spawner Skill for Claude Code
  *
  * Spawn AI coding assistants in isolated tmux sessions with optional git worktrees.
+ * Supports Redis heartbeat, pub/sub for inter-agent communication, and auto-respawn.
  *
  * Usage:
  * import { coders } from '@jayphen/coders';
@@ -16,6 +17,13 @@
  *   task: 'Refactor the authentication module',
  *   worktree: 'feature/auth-refactor',
  *   prd: 'docs/auth-prd.md'
+ * });
+ *
+ * // With Redis heartbeat enabled
+ * await coders.spawn({
+ *   tool: 'claude',
+ *   task: 'Fix the bug',
+ *   redis: { url: 'redis://localhost:6379' }
  * });
  *
  * // Quick helpers
@@ -57,6 +65,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.coders = void 0;
+exports.configure = configure;
 exports.spawn = spawn;
 exports.list = list;
 exports.attach = attach;
@@ -64,13 +73,31 @@ exports.kill = kill;
 exports.claude = claude;
 exports.gemini = gemini;
 exports.codex = codex;
+exports.opencode = opencode;
 exports.worktree = worktree;
 exports.getActiveSessions = getActiveSessions;
+exports.spawnWithHeartbeat = spawnWithHeartbeat;
+exports.sendMessage = sendMessage;
+exports.listenForMessages = listenForMessages;
 const child_process_1 = require("child_process");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const redis_1 = require("./redis");
 const WORKTREE_BASE = '../worktrees';
 const SESSION_PREFIX = 'coder-';
+/**
+ * Global config for coders skill
+ */
+let globalConfig = {
+    snapshotDir: '~/.coders/snapshots',
+    deadLetterTimeout: 120000 // 2 minutes
+};
+/**
+ * Configure the coders skill globally
+ */
+function configure(config) {
+    globalConfig = { ...globalConfig, ...config };
+}
 /**
  * Get the git root directory
  */
@@ -121,10 +148,21 @@ function createWorktree(branchName, baseBranch = 'main') {
     }
 }
 /**
- * Build the spawn command for a tool
+ * Build the spawn command for a tool with optional pane ID injection
  */
-function buildCommand(tool, promptFile, worktreePath) {
-    const env = worktreePath ? `WORKSPACE_DIR="${worktreePath}" ` : '';
+function buildCommand(tool, promptFile, worktreePath, paneId, redisConfig) {
+    const envVars = [];
+    if (worktreePath) {
+        envVars.push(`WORKSPACE_DIR="${worktreePath}"`);
+    }
+    if (paneId) {
+        envVars.push(`CODERS_PANE_ID="${paneId}"`);
+        envVars.push(`CODERS_SESSION_ID="${SESSION_PREFIX}${tool}-${Date.now()}"`);
+    }
+    if (redisConfig?.url) {
+        envVars.push(`REDIS_URL="${redisConfig.url}"`);
+    }
+    const env = envVars.length > 0 ? envVars.join(' ') + ' ' : '';
     if (tool === 'claude' || tool === 'claude-code') {
         return `${env}claude --dangerously-spawn-permission -f "${promptFile}"`;
     }
@@ -134,13 +172,21 @@ function buildCommand(tool, promptFile, worktreePath) {
     else if (tool === 'codex') {
         return `${env}codex -f "${promptFile}"`;
     }
+    else if (tool === 'opencode') {
+        return `${env}opencode -f "${promptFile}"`;
+    }
     throw new Error(`Unknown tool: ${tool}`);
 }
 /**
- * Generate a prompt file with task and context
+ * Generate a prompt file with task, context, and pane ID injection
  */
-function createPrompt(task, contextFiles) {
-    let prompt = `TASK: ${task}\n\n`;
+function createPrompt(task, contextFiles, paneId, redisConfig) {
+    let prompt = '';
+    // Inject pane ID context if provided
+    if (paneId) {
+        prompt += (0, redis_1.injectPaneIdContext)('', paneId);
+    }
+    prompt += `TASK: ${task}\n\n`;
     if (contextFiles && contextFiles.length > 0) {
         prompt += 'CONTEXT:\n';
         contextFiles.forEach(file => {
@@ -151,18 +197,51 @@ function createPrompt(task, contextFiles) {
         });
         prompt += '\n';
     }
+    // Add Redis info to prompt if configured
+    if (redisConfig?.url) {
+        prompt += `
+<!-- REDIS CONFIG -->
+<!-- HEARTBEAT_CHANNEL: ${redis_1.HEARTBEAT_CHANNEL} -->
+<!-- DEAD_LETTER_KEY: ${redis_1.DEAD_LETTER_KEY} -->
+
+Redis is configured for this session. Publish heartbeats to enable
+auto-respawn if you become unresponsive for >2 minutes.
+
+Heartbeat format:
+{
+  "paneId": "${paneId || '<your-pane-id)'}",
+  "status": "alive",
+  "timestamp": Date.now()
+}
+
+Publish to Redis channel: ${redis_1.HEARTBEAT_CHANNEL}
+`;
+    }
     return prompt;
+}
+/**
+ * Start the dead-letter listener for a session
+ */
+function startDeadLetterListener(redisConfig) {
+    if (!redisConfig?.url)
+        return null;
+    const listener = new redis_1.DeadLetterListener(redisConfig);
+    listener.start().catch(e => {
+        console.error('Failed to start dead-letter listener:', e);
+    });
+    return listener;
 }
 /**
  * Spawn a new AI coding assistant in a tmux session
  */
 async function spawn(options) {
-    const { tool, task = '', name, worktree, baseBranch = 'main', prd, interactive = true } = options;
+    const { tool, task = '', name, worktree, baseBranch = 'main', prd, interactive = true, redis: redisConfig, enableHeartbeat = !!redisConfig?.url, enableDeadLetter = !!redisConfig?.url, paneId: providedPaneId } = options;
     if (!task) {
         return '❌ Task description is required. Pass `task: "..."` or use interactive mode.';
     }
     const sessionName = name || `${tool}-${Date.now()}`;
     const sessionId = `${SESSION_PREFIX}${sessionName}`;
+    const paneId = providedPaneId || (0, redis_1.getPaneId)();
     // Create worktree if requested
     let worktreePath;
     if (worktree) {
@@ -176,26 +255,46 @@ async function spawn(options) {
             // Worktree might exist
         }
     }
-    // Build prompt with optional PRD
+    // Build prompt with optional PRD and Redis context
     const contextFiles = prd ? [prd] : [];
-    const prompt = createPrompt(task, contextFiles);
+    const prompt = createPrompt(task, contextFiles, paneId, redisConfig);
     const promptFile = `/tmp/coders-prompt-${Date.now()}.txt`;
     fs.writeFileSync(promptFile, prompt);
-    // Build and run command
-    const cmd = buildCommand(tool, promptFile, worktreePath);
+    // Build command with environment variables
+    const cmd = buildCommand(tool, promptFile, worktreePath, paneId, redisConfig);
+    // Start dead-letter listener if enabled
+    let deadLetterListener = null;
+    if (enableDeadLetter && redisConfig) {
+        deadLetterListener = startDeadLetterListener(redisConfig);
+    }
     try {
+        // Clean up existing session if any
         try {
             (0, child_process_1.execSync)(`tmux kill-session -t ${sessionId}`);
         }
         catch { }
+        // Create new tmux session
         (0, child_process_1.execSync)(`tmux new-session -s "${sessionId}" -d "${cmd}"`);
+        // Store pane info for Redis if configured
+        if (redisConfig?.url) {
+            const redis = new redis_1.RedisManager(redisConfig);
+            await redis.connect();
+            await redis.setPaneId(paneId);
+            if (enableHeartbeat) {
+                redis.startHeartbeat();
+            }
+        }
         return `
 🤖 Spawned **${tool}** in new tmux window!
 
 **Session:** ${sessionId}
+**Pane ID:** ${paneId}
 **Worktree:** ${worktreePath || 'main repo'}
 **Task:** ${task}
 **PRD:** ${prd || 'none'}
+**Redis:** ${redisConfig?.url || 'disabled'}
+**Heartbeat:** ${enableHeartbeat ? 'enabled' : 'disabled'}
+**Auto-Respawn:** ${enableDeadLetter ? 'enabled (2min timeout)' : 'disabled'}
 
 To attach:
 \`coders attach ${sessionName}\`
@@ -255,6 +354,9 @@ async function gemini(task, options) {
 async function codex(task, options) {
     return spawn({ tool: 'codex', task, ...options });
 }
+async function opencode(task, options) {
+    return spawn({ tool: 'opencode', task, ...options });
+}
 /**
  * Alias for spawn with worktree - quick syntax
  */
@@ -263,7 +365,10 @@ async function worktree(branchName, task, options) {
         tool: options?.tool || 'claude',
         task,
         worktree: branchName,
-        prd: options?.prd
+        prd: options?.prd,
+        redis: options?.redis,
+        enableHeartbeat: options?.enableHeartbeat,
+        enableDeadLetter: options?.enableDeadLetter
     });
 }
 /**
@@ -289,19 +394,66 @@ function getActiveSessions() {
     }
 }
 /**
+ * Spawn with Redis heartbeat enabled
+ */
+async function spawnWithHeartbeat(options) {
+    return spawn({
+        ...options,
+        redis: options.redis || globalConfig.redis,
+        enableHeartbeat: true,
+        enableDeadLetter: true
+    });
+}
+/**
+ * Send message to another agent via Redis pub/sub
+ */
+async function sendMessage(channel, message, redisConfig) {
+    const config = redisConfig || globalConfig.redis;
+    if (!config?.url) {
+        throw new Error('Redis not configured. Pass redis config or set global config.');
+    }
+    const redis = new redis_1.RedisManager(config);
+    await redis.connect();
+    await redis.publishMessage(channel, message);
+    await redis.disconnect();
+}
+/**
+ * Listen for messages from other agents via Redis pub/sub
+ */
+async function listenForMessages(channel, callback, redisConfig) {
+    const config = redisConfig || globalConfig.redis;
+    if (!config?.url) {
+        throw new Error('Redis not configured. Pass redis config or set global config.');
+    }
+    const redis = new redis_1.RedisManager(config);
+    await redis.subscribeToChannel(channel, callback);
+}
+/**
  * Main export with all functions
  */
 exports.coders = {
     spawn,
+    spawnWithHeartbeat,
     list,
     attach,
     kill,
     claude,
     gemini,
     codex,
+    opencode,
     worktree,
     createWorktree,
-    getActiveSessions
+    getActiveSessions,
+    configure,
+    sendMessage,
+    listenForMessages,
+    // Re-export from redis.ts
+    RedisManager: redis_1.RedisManager,
+    DeadLetterListener: redis_1.DeadLetterListener,
+    getPaneId: redis_1.getPaneId,
+    injectPaneIdContext: redis_1.injectPaneIdContext,
+    HEARTBEAT_CHANNEL: redis_1.HEARTBEAT_CHANNEL,
+    DEAD_LETTER_KEY: redis_1.DEAD_LETTER_KEY
 };
 exports.default = exports.coders;
 //# sourceMappingURL=coders.js.map
