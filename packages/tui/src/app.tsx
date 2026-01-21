@@ -7,7 +7,11 @@ import { Header } from './components/Header.js';
 import type { Session } from './types.js';
 import { getTmuxSessions, attachSession, killSession, killCompletedSessions, resumeSession } from './tmux.js';
 
-export function App() {
+interface Props {
+  version?: string;
+}
+
+export function App({ version }: Props) {
   const { exit } = useApp();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -138,7 +142,7 @@ export function App() {
 
   return (
     <Box flexDirection="column" padding={1}>
-      <Header />
+      <Header version={version} />
 
       {/* Confirmation dialog */}
       {confirmKillCompleted && (

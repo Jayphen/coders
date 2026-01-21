@@ -2,9 +2,23 @@
 import { render } from 'ink';
 import { execSync, spawnSync } from 'child_process';
 import * as tty from 'tty';
+import { fileURLToPath } from 'url';
+import path from 'path';
+import fs from 'fs';
 import { App } from './app.js';
 
 const TUI_SESSION = 'coders-tui';
+
+// Read version from package.json
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const packageJsonPath = path.resolve(__dirname, '../package.json');
+let version = 'unknown';
+try {
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+  version = packageJson.version;
+} catch (e) {
+  // Ignore
+}
 
 function isInsideTmux(): boolean {
   return !!process.env.TMUX;
@@ -72,5 +86,5 @@ if (!isInsideTmux() || !hasTTY()) {
   launchInTmuxSession();
 } else {
   // We're inside tmux with a proper TTY - render the app
-  render(<App />);
+  render(<App version={version} />);
 }
