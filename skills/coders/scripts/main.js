@@ -35,6 +35,70 @@ function getGitRoot() {
   }
 }
 
+/**
+ * Check if zoxide is installed on the system
+ */
+function isZoxideAvailable() {
+  try {
+    execSync('which zoxide', { encoding: 'utf8', stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve a path using zoxide if available, otherwise return the path as-is
+ * @param {string} pathArg - The path argument (could be partial like "vega")
+ * @returns {{ resolved: string, method: 'zoxide' | 'direct' } | null} - Resolved path info or null if resolution failed
+ */
+function resolvePathWithZoxide(pathArg) {
+  // First, check if it's already a valid absolute or relative path
+  const directPath = path.isAbsolute(pathArg)
+    ? pathArg
+    : path.resolve(process.cwd(), pathArg);
+
+  if (fs.existsSync(directPath) && fs.statSync(directPath).isDirectory()) {
+    return { resolved: directPath, method: 'direct' };
+  }
+
+  // Try zoxide if available
+  if (isZoxideAvailable()) {
+    try {
+      const zoxidePath = execSync(`zoxide query "${pathArg}"`, {
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe']
+      }).trim();
+
+      if (zoxidePath && fs.existsSync(zoxidePath) && fs.statSync(zoxidePath).isDirectory()) {
+        return { resolved: zoxidePath, method: 'zoxide' };
+      }
+    } catch {
+      // zoxide query failed (no match found)
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Validate that a path exists and is a directory
+ * @param {string} resolvedPath - The path to validate
+ * @returns {{ valid: boolean, error?: string }}
+ */
+function validatePath(resolvedPath) {
+  if (!fs.existsSync(resolvedPath)) {
+    return { valid: false, error: `Path does not exist: ${resolvedPath}` };
+  }
+
+  const stats = fs.statSync(resolvedPath);
+  if (!stats.isDirectory()) {
+    return { valid: false, error: `Path is not a directory: ${resolvedPath}` };
+  }
+
+  return { valid: true };
+}
+
 function createWorktree(branchName, baseBranch = 'main') {
   const gitRoot = getGitRoot();
   const worktreePath = path.join(gitRoot, '../worktrees', branchName);
@@ -569,8 +633,8 @@ if (command === 'help' || !command) {
       taskDesc = args[i+1];
       i++;
     } else if ((arg === '--cwd' || arg === '--dir') && args[i+1]) {
-      // Resolve to absolute path
-      customCwd = path.isAbsolute(args[i+1]) ? args[i+1] : path.resolve(process.cwd(), args[i+1]);
+      // Store raw path arg - will be resolved later with zoxide support
+      customCwd = args[i+1];
       i++;
     } else if (arg === '--heartbeat' || arg === '--dashboard') {
       enableHeartbeat = true;
@@ -583,20 +647,55 @@ if (command === 'help' || !command) {
   if (!sessionName) {
     sessionName = generateSessionName(tool, taskDesc);
   }
-  
+
+  // Resolve and validate custom working directory if provided
+  let resolvedCwd = null;
+  if (customCwd) {
+    const pathResult = resolvePathWithZoxide(customCwd);
+
+    if (!pathResult) {
+      // Path resolution failed
+      const hasZoxide = isZoxideAvailable();
+      log(`❌ Invalid path: "${customCwd}"`, 'red');
+      log(`   Path does not exist and could not be resolved.`, 'red');
+      if (hasZoxide) {
+        log(`   Note: zoxide was checked but found no match.`, 'yellow');
+      } else {
+        log(`   Tip: Install zoxide (https://github.com/ajeetdsouza/zoxide) for smart directory jumping.`, 'yellow');
+      }
+      process.exit(1);
+    }
+
+    // Validate the resolved path
+    const validation = validatePath(pathResult.resolved);
+    if (!validation.valid) {
+      log(`❌ ${validation.error}`, 'red');
+      process.exit(1);
+    }
+
+    resolvedCwd = pathResult.resolved;
+
+    // Log resolution method
+    if (pathResult.method === 'zoxide') {
+      log(`🔍 Resolved "${customCwd}" → ${resolvedCwd} (via zoxide)`, 'blue');
+    } else if (customCwd !== resolvedCwd) {
+      log(`📁 Working directory: ${resolvedCwd}`, 'blue');
+    }
+  }
+
   // Create worktree if requested
   let worktreePath = null;
   if (worktreeBranch) {
     worktreePath = createWorktree(worktreeBranch, baseBranch);
   }
-  
+
   // Build context from PRD
   const contextFiles = prdFile ? [prdFile] : [];
   const prompt = generateInitialPrompt(tool, taskDesc, contextFiles);
-  
+
   // Spawn in new tmux window
   // Always use tmux for reliability
-  spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat, null, customCwd);
+  spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat, null, resolvedCwd);
 
   log(`\n✅ Created new window for session "${sessionName}"!`, 'green');
   // Show parent info if spawned from another session
