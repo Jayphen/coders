@@ -116,6 +116,31 @@ export function SessionDetail({ session }: Props) {
           <Text dimColor={session.hasPromise}>{formatAge(session.createdAt)}</Text>
         </Box>
 
+        {session.usage && (
+          <Box flexDirection="column" marginTop={0}>
+            <Box>
+              <Box width={12}>
+                <Text dimColor>Usage:</Text>
+              </Box>
+            </Box>
+            {session.usage.cost && (
+              <Box marginLeft={2}>
+                <Text color="yellow">Cost: {session.usage.cost}</Text>
+              </Box>
+            )}
+            {session.usage.tokens && (
+              <Box marginLeft={2}>
+                <Text>Tokens: {session.usage.tokens.toLocaleString()}</Text>
+              </Box>
+            )}
+            {session.usage.apiCalls && (
+              <Box marginLeft={2}>
+                <Text>API Calls: {session.usage.apiCalls}</Text>
+              </Box>
+            )}
+          </Box>
+        )}
+
         {session.parentSessionId && (
           <Box>
             <Box width={12}>

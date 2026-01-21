@@ -1,7 +1,8 @@
 import { execSync, spawn, spawnSync } from 'child_process';
-import type { Session, CoderPromise } from './types.js';
+import type { Session, CoderPromise, HeartbeatData } from './types.js';
 
 const PROMISE_KEY_PREFIX = 'coders:promise:';
+const PANE_KEY_PREFIX = 'coders:pane:';
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
 export function getCurrentSession(): string | null {
@@ -51,6 +52,48 @@ function getPromises(): Map<string, CoderPromise> {
   return promises;
 }
 
+/**
+ * Query Redis for all session heartbeats using redis-cli
+ */
+function getHeartbeats(): Map<string, HeartbeatData> {
+  const heartbeats = new Map<string, HeartbeatData>();
+
+  try {
+    // Get all pane keys
+    const keysOutput = execSync(
+      `redis-cli --no-auth-warning KEYS "${PANE_KEY_PREFIX}*" 2>/dev/null`,
+      { encoding: 'utf-8', timeout: 2000 }
+    ).trim();
+
+    if (!keysOutput) return heartbeats;
+
+    const keys = keysOutput.split('\n').filter(k => k.length > 0);
+
+    for (const key of keys) {
+      try {
+        const value = execSync(
+          `redis-cli --no-auth-warning GET "${key}" 2>/dev/null`,
+          { encoding: 'utf-8', timeout: 1000 }
+        ).trim();
+
+        if (value) {
+          const data = JSON.parse(value) as HeartbeatData;
+          // Store by sessionId for easy lookup
+          if (data.sessionId) {
+            heartbeats.set(data.sessionId, data);
+          }
+        }
+      } catch {
+        // Ignore individual key errors
+      }
+    }
+  } catch {
+    // Redis not available or error
+  }
+
+  return heartbeats;
+}
+
 export async function getTmuxSessions(): Promise<Session[]> {
   try {
     // Get session info including pane title (which may contain task description)
@@ -61,6 +104,8 @@ export async function getTmuxSessions(): Promise<Session[]> {
 
     // Get promises from Redis
     const promises = getPromises();
+    // Get heartbeats from Redis
+    const heartbeats = getHeartbeats();
 
     const sessions: Session[] = output
       .trim()
@@ -87,6 +132,26 @@ export async function getTmuxSessions(): Promise<Session[]> {
 
         // Get promise data if available
         const promise = promises.get(name);
+        
+        // Get heartbeat data if available
+        const heartbeat = heartbeats.get(name);
+        
+        // Determine heartbeat status
+        let heartbeatStatus: Session['heartbeatStatus'] = 'dead';
+        if (heartbeat) {
+          const age = Date.now() - heartbeat.timestamp;
+          if (age < 60000) { // < 1 min
+            heartbeatStatus = 'healthy';
+          } else if (age < 300000) { // < 5 min
+            heartbeatStatus = 'stale';
+          } else {
+            heartbeatStatus = 'dead';
+          }
+        } else if (isOrchestrator) {
+           // Orchestrator is assumed healthy if we are running the TUI (which usually means orchestrator is up)
+           // But better to check if it has a heartbeat
+           heartbeatStatus = 'healthy'; 
+        }
 
         return {
           name,
@@ -97,9 +162,10 @@ export async function getTmuxSessions(): Promise<Session[]> {
           cwd: cwd || process.cwd(),
           createdAt: created ? new Date(parseInt(created) * 1000) : undefined,
           isOrchestrator,
-          heartbeatStatus: 'healthy' as const, // TODO: integrate with Redis
+          heartbeatStatus,
           promise,
           hasPromise: !!promise,
+          usage: heartbeat?.usage,
         };
       })
       // Sort: orchestrator first, then active sessions, then completed sessions

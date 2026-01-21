@@ -11,6 +11,12 @@ export interface Session {
   // Promise (completion) data
   promise?: CoderPromise;
   hasPromise?: boolean;
+  // Usage statistics
+  usage?: {
+    cost?: string;
+    tokens?: number;
+    apiCalls?: number;
+  };
 }
 
 export interface HeartbeatData {
@@ -20,6 +26,11 @@ export interface HeartbeatData {
   status: string;
   lastActivity?: string;
   parentSessionId?: string;
+  usage?: {
+    cost?: string;
+    tokens?: number;
+    apiCalls?: number;
+  };
 }
 
 export interface CoderPromise {

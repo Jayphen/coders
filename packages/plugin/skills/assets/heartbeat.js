@@ -7,6 +7,7 @@
  * Run this in the background within each coder session.
  */
 
+const { execSync } = require('child_process');
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const HEARTBEAT_CHANNEL = 'coders:heartbeats';
 const PANE_KEY_PREFIX = 'coders:pane:';
@@ -28,6 +29,78 @@ let connectPromise = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
 let isShuttingDown = false;
+
+function getUsageStats() {
+  try {
+    // Capture the last 100 lines of the pane
+    // Use the session ID to target the pane (assuming one pane per session window for now)
+    // or use the paneId if it corresponds to a tmux pane id (e.g. %1)
+    // If paneId is just a random string, we rely on sessionId
+    const target = sessionId.startsWith('coder-') ? sessionId : sessionId;
+    
+    // Check if we can identify the pane
+    // If paneId starts with %, use it. Otherwise use session target
+    const tmuxTarget = paneId.startsWith('%') ? paneId : target;
+
+    const output = execSync(`tmux capture-pane -p -t "${tmuxTarget}" -S -100 2>/dev/null`, { 
+      encoding: 'utf8',
+      timeout: 1000 
+    });
+
+    if (!output) return null;
+
+    // Parse for usage stats
+    // Patterns to look for:
+    // "Total cost: $0.05"
+    // "Tokens: 1234"
+    // "Context tokens: 1000"
+    // "Generated tokens: 50"
+    
+    const stats = {};
+    const lines = output.split('\n');
+    
+    // Reverse iterate to find the most recent stats
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      
+      // Cost
+      if (!stats.cost) {
+        const costMatch = line.match(/Total cost:\s*\$([0-9.]+)/i) || 
+                          line.match(/Cost:\s*\$([0-9.]+)/i);
+        if (costMatch) {
+          stats.cost = costMatch[1];
+        }
+      }
+
+      // Tokens
+      if (!stats.tokens) {
+        // Look for comprehensive token stats first
+        const tokenMatch = line.match(/Tokens:\s*(\d+)/i) ||
+                           line.match(/Total tokens:\s*(\d+)/i);
+        if (tokenMatch) {
+          stats.tokens = parseInt(tokenMatch[1], 10);
+        }
+      }
+      
+      if (!stats.apiCalls) {
+        const callsMatch = line.match(/API calls:\s*(\d+)/i);
+        if (callsMatch) {
+          stats.apiCalls = parseInt(callsMatch[1], 10);
+        }
+      }
+
+      // Stop if we found everything or went back too far (e.g. 50 lines)
+      if ((stats.cost && stats.tokens) || lines.length - i > 50) {
+        break;
+      }
+    }
+
+    return Object.keys(stats).length > 0 ? stats : null;
+  } catch (e) {
+    // console.error('Failed to get usage stats:', e.message);
+    return null;
+  }
+}
 
 function getReconnectDelay(attempt) {
   const jitter = Math.floor(Math.random() * 250);
@@ -96,11 +169,14 @@ async function ensureConnected() {
 async function publishHeartbeat() {
   if (!(await ensureConnected())) return;
 
+  const usage = getUsageStats();
+
   const data = {
     paneId,
     sessionId,
     timestamp: Date.now(),
-    parentSessionId
+    parentSessionId,
+    usage
   };
 
   try {
