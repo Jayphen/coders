@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coders Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/ansi_up@5.1.0/ansi_up.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: #58a6ff;
+      margin-bottom: 10px;
+      font-size: 32px;
+    }
+
+    .subtitle {
+      color: #8b949e;
+      margin-bottom: 30px;
+    }
+
+    .sessions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .session-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 20px;
+      transition: border-color 0.2s;
+    }
+
+    .session-card.stale {
+      opacity: 0.5;
+    }
+
+    .session-card.orchestrator {
+      background: linear-gradient(135deg, #1e2a3a 0%, #161b22 100%);
+      border: 2px solid #58a6ff;
+      box-shadow: 0 0 20px rgba(88, 166, 255, 0.2);
+    }
+
+    .session-card:hover {
+      border-color: #58a6ff;
+    }
+
+    .session-card.pulse {
+      animation: pulse-glow 1.2s ease-out;
+    }
+
+    @keyframes pulse-glow {
+      0% {
+        box-shadow: 0 0 0 rgba(88, 166, 255, 0);
+      }
+      50% {
+        box-shadow: 0 0 14px rgba(88, 166, 255, 0.35);
+      }
+      100% {
+        box-shadow: 0 0 0 rgba(88, 166, 255, 0);
+      }
+    }
+
+    .session-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .session-name {
+      font-size: 18px;
+      font-weight: 600;
+      color: #c9d1d9;
+      font-family: 'Monaco', 'Courier New', monospace;
+    }
+
+    .session-display-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #58a6ff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin-bottom: 2px;
+    }
+
+    .session-id {
+      font-size: 11px;
+      color: #6e7681;
+      font-family: 'Monaco', 'Courier New', monospace;
+    }
+
+    .session-name-container {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .status {
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status.active {
+      background: #238636;
+      color: #fff;
+    }
+
+    .status.idle {
+      background: #9e6a03;
+      color: #fff;
+    }
+
+    .status.waiting {
+      background: #1f6feb;
+      color: #fff;
+    }
+
+    .status.stale {
+      background: #6e7681;
+      color: #fff;
+    }
+
+    .status.unknown {
+      background: #30363d;
+      color: #8b949e;
+    }
+
+    .session-info {
+      margin-bottom: 15px;
+      font-size: 14px;
+      color: #8b949e;
+    }
+
+    .session-info div {
+      margin-bottom: 5px;
+    }
+
+    .typing-indicator {
+      display: inline-flex;
+      gap: 4px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    .typing-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #58a6ff;
+      opacity: 0.5;
+      animation: typing-bounce 1s infinite ease-in-out;
+    }
+
+    .typing-dot:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .typing-dot:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+
+    @keyframes typing-bounce {
+      0%, 80%, 100% {
+        transform: translateY(0);
+        opacity: 0.4;
+      }
+      40% {
+        transform: translateY(-3px);
+        opacity: 0.9;
+      }
+    }
+
+    .heartbeat-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+      animation: pulse 2s infinite;
+    }
+
+    .heartbeat-indicator.has-heartbeat {
+      background: #3fb950;
+    }
+
+    .heartbeat-indicator.no-heartbeat {
+      background: #6e7681;
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    button {
+      padding: 8px 16px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #c9d1d9;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    button:hover {
+      background: #30363d;
+      border-color: #58a6ff;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .output-panel {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 20px;
+      margin-top: 30px;
+      display: none;
+    }
+
+    .output-panel.visible {
+      display: block;
+    }
+
+    .output-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .output-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #58a6ff;
+    }
+
+    .close-btn {
+      background: transparent;
+      border: none;
+      color: #8b949e;
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0;
+      width: 30px;
+      height: 30px;
+    }
+
+    .close-btn:hover {
+      color: #c9d1d9;
+    }
+
+    .output-content {
+      background: #000;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-x: auto;
+      white-space: pre;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .send-message {
+      margin-top: 15px;
+      display: flex;
+      gap: 10px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 8px 12px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      font-size: 14px;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #58a6ff;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #8b949e;
+    }
+
+    .empty-state h2 {
+      font-size: 24px;
+      margin-bottom: 10px;
+      color: #c9d1d9;
+    }
+
+    .stats {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 30px;
+      flex-wrap: wrap;
+    }
+
+    .stat-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 20px;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #58a6ff;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      color: #8b949e;
+      font-size: 14px;
+    }
+
+    .orchestrator-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #58a6ff 0%, #1f6feb 100%);
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-left: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .orchestrator-panel {
+      background: linear-gradient(135deg, #1e2a3a 0%, #161b22 100%);
+      border: 2px solid #58a6ff;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 30px;
+      box-shadow: 0 0 30px rgba(88, 166, 255, 0.3);
+    }
+
+    .orchestrator-panel.hidden {
+      display: none;
+    }
+
+    .orchestrator-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #30363d;
+    }
+
+    .orchestrator-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .orchestrator-title h2 {
+      font-size: 20px;
+      color: #58a6ff;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .orchestrator-controls {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      flex: 1;
+      margin-top: 15px;
+    }
+
+    .orchestrator-input-group {
+      display: flex;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .orchestrator-input-group input {
+      flex: 1;
+      padding: 10px 15px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      font-size: 14px;
+    }
+
+    .orchestrator-input-group input:focus {
+      outline: none;
+      border-color: #58a6ff;
+      box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
+    }
+
+    .orchestrator-input-group button {
+      padding: 10px 20px;
+      background: linear-gradient(135deg, #58a6ff 0%, #1f6feb 100%);
+      border: none;
+      color: white;
+      font-weight: 600;
+    }
+
+    .orchestrator-input-group button:hover {
+      background: linear-gradient(135deg, #6cb6ff 0%, #3d8bfd 100%);
+    }
+
+    .orchestrator-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+      font-size: 13px;
+      color: #8b949e;
+    }
+
+    .orchestrator-stat {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .orchestrator-stat-label {
+      color: #6e7681;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .orchestrator-stat-value {
+      color: #58a6ff;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .sections-divider {
+      margin: 40px 0 30px 0;
+      border: 0;
+      height: 1px;
+      background: linear-gradient(to right, transparent, #30363d, transparent);
+    }
+
+    .section-title {
+      color: #8b949e;
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 20px;
+    }
+
+    /* Parent-child session grouping */
+    .session-group {
+      margin-bottom: 20px;
+    }
+
+    .session-group .session-card.parent {
+      border-left: 3px solid #58a6ff;
+    }
+
+    .session-group .children-container {
+      margin-left: 25px;
+      padding-left: 20px;
+      border-left: 2px dashed #30363d;
+      margin-top: 10px;
+    }
+
+    .session-group .children-container .session-card {
+      margin-bottom: 10px;
+      background: #1a1f27;
+    }
+
+    .session-group .children-container .session-card:last-child {
+      margin-bottom: 0;
+    }
+
+    .parent-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-left: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .child-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #6e7681 0%, #8b949e 100%);
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-left: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .children-count {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: #58a6ff;
+      font-size: 12px;
+      margin-left: 8px;
+    }
+
+    .children-count svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .parent-link {
+      font-size: 12px;
+      color: #8b949e;
+      margin-bottom: 5px;
+    }
+
+    .parent-link a {
+      color: #58a6ff;
+      text-decoration: none;
+    }
+
+    .parent-link a:hover {
+      text-decoration: underline;
+    }
+
+    /* Special keys styles */
+    .special-keys-section {
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid #30363d;
+    }
+
+    .special-keys-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .special-keys-title {
+      font-size: 13px;
+      color: #8b949e;
+      font-weight: 600;
+    }
+
+    .tool-selector {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .tool-selector select {
+      padding: 4px 8px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      color: #c9d1d9;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .tool-selector select:focus {
+      outline: none;
+      border-color: #58a6ff;
+    }
+
+    .special-keys-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .special-key-btn {
+      padding: 6px 10px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      color: #c9d1d9;
+      font-size: 12px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .special-key-btn:hover {
+      background: #30363d;
+      border-color: #58a6ff;
+    }
+
+    .special-key-btn:active {
+      transform: scale(0.95);
+    }
+
+    .special-key-btn.danger {
+      border-color: #da3633;
+    }
+
+    .special-key-btn.danger:hover {
+      background: rgba(218, 54, 51, 0.2);
+      border-color: #f85149;
+    }
+
+    .special-key-btn .key-label {
+      font-weight: 600;
+    }
+
+    .special-key-btn .key-desc {
+      color: #8b949e;
+      font-size: 11px;
+    }
+
+    .key-sent-feedback {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #238636;
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s;
+      z-index: 1000;
+    }
+
+    .key-sent-feedback.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Activity indicator styles */
+    .activity-indicator {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .activity-indicator.active {
+      background: #238636;
+      color: #fff;
+    }
+
+    .activity-indicator.idle {
+      background: #9e6a03;
+      color: #fff;
+    }
+
+    .activity-indicator.waiting {
+      background: #1f6feb;
+      color: #fff;
+    }
+
+    .activity-indicator.stale {
+      background: #6e7681;
+      color: #fff;
+    }
+
+    .activity-indicator.unknown {
+      background: #30363d;
+      color: #8b949e;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🤖 Coders Dashboard</h1>
+    <p class="subtitle">Monitor and interact with your AI coding sessions</p>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-value" id="total-sessions">0</div>
+        <div class="stat-label">Total Sessions</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="active-sessions">0</div>
+        <div class="stat-label">Active Sessions</div>
+      </div>
+    </div>
+
+    <!-- Orchestrator Panel -->
+    <div class="orchestrator-panel hidden" id="orchestrator-panel">
+      <div class="orchestrator-header">
+        <div class="orchestrator-title">
+          <h2>🎯 Orchestrator</h2>
+          <div class="status" id="orchestrator-status">unknown</div>
+        </div>
+      </div>
+
+      <div class="orchestrator-stats" id="orchestrator-stats">
+        <div class="orchestrator-stat">
+          <div class="orchestrator-stat-label">Last Seen</div>
+          <div class="orchestrator-stat-value" id="orchestrator-last-seen">Never</div>
+        </div>
+        <div class="orchestrator-stat">
+          <div class="orchestrator-stat-label">Last Response</div>
+          <div class="orchestrator-stat-value" id="orchestrator-last-response">Never</div>
+        </div>
+        <div class="orchestrator-stat">
+          <div class="orchestrator-stat-label">Activity</div>
+          <div class="orchestrator-stat-value" id="orchestrator-activity">unknown</div>
+        </div>
+        <div class="orchestrator-stat">
+          <div class="orchestrator-stat-label">Windows</div>
+          <div class="orchestrator-stat-value" id="orchestrator-windows">0</div>
+        </div>
+        <div class="orchestrator-stat">
+          <div class="orchestrator-stat-label">Working Directory</div>
+          <div class="orchestrator-stat-value" id="orchestrator-cwd" title="">📁 unknown</div>
+        </div>
+      </div>
+
+      <div class="orchestrator-controls">
+        <div class="orchestrator-input-group">
+          <input
+            type="text"
+            id="orchestrator-input"
+            placeholder="Send command to orchestrator (e.g., 'coders spawn claude --task \"Fix the bug\"')"
+          />
+          <button onclick="sendToOrchestrator()">Send</button>
+        </div>
+        <button onclick="viewOrchestratorOutput()">View Output</button>
+      </div>
+    </div>
+
+    <hr class="sections-divider">
+    <div class="section-title">Coder Sessions</div>
+
+    <div class="sessions-grid" id="sessions-grid">
+      <div class="empty-state">
+        <h2>No active sessions</h2>
+        <p>Spawn a coder session to get started!</p>
+      </div>
+    </div>
+
+    <div class="output-panel" id="output-panel">
+      <div class="output-header">
+        <div class="output-title" id="output-session-name">Session Output</div>
+        <button class="close-btn" onclick="closeOutput()">×</button>
+      </div>
+      <div class="output-content" id="output-content"></div>
+      <div class="send-message">
+        <input type="text" id="message-input" placeholder="Type a message to send to this session..." />
+        <button onclick="sendMessage()">Send</button>
+      </div>
+      <div class="special-keys-section">
+        <div class="special-keys-header">
+          <span class="special-keys-title">Special Keys</span>
+          <div class="tool-selector">
+            <select id="tool-filter" onchange="updateSpecialKeys()">
+              <option value="common">Common</option>
+              <option value="claude">Claude Code</option>
+              <option value="gemini">Gemini CLI</option>
+              <option value="codex">Codex CLI</option>
+              <option value="opencode">OpenCode</option>
+            </select>
+          </div>
+        </div>
+        <div class="special-keys-grid" id="special-keys-grid">
+          <!-- Keys populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="key-sent-feedback" id="key-feedback">Key sent!</div>
+
+  <script>
+    let currentSession = null;
+    let currentSessionsData = []; // Store sessions data for displayName lookup
+    let updateInterval = null;
+    const sessionSignatures = new Map();
+
+    // Special keys configuration by tool
+    const SPECIAL_KEYS = {
+      common: [
+        { key: 'C-c', label: 'Ctrl+C', desc: 'Cancel/Interrupt', danger: true },
+        { key: 'C-d', label: 'Ctrl+D', desc: 'Exit', danger: true },
+        { key: 'Escape', label: 'Esc', desc: 'Cancel' },
+        { key: 'Escape Escape', label: 'Esc Esc', desc: 'Rewind', delay: 100 },
+        { key: 'C-l', label: 'Ctrl+L', desc: 'Clear' },
+        { key: 'Enter', label: 'Enter', desc: 'Submit' },
+        { key: 'Tab', label: 'Tab', desc: 'Complete' },
+        { key: 'BTab', label: 'Shift+Tab', desc: 'Toggle' },
+        { key: 'Up', label: 'Up', desc: 'History' },
+        { key: 'Down', label: 'Down', desc: 'History' },
+      ],
+      claude: [
+        { key: 'C-c', label: 'Ctrl+C', desc: 'Cancel', danger: true },
+        { key: 'C-d', label: 'Ctrl+D', desc: 'Exit', danger: true },
+        { key: 'C-o', label: 'Ctrl+O', desc: 'Verbose' },
+        { key: 'C-b', label: 'Ctrl+B', desc: 'Background' },
+        { key: 'Escape Escape', label: 'Esc Esc', desc: 'Rewind', delay: 100 },
+        { key: 'C-l', label: 'Ctrl+L', desc: 'Clear' },
+        { key: 'C-g', label: 'Ctrl+G', desc: 'Editor' },
+        { key: 'C-r', label: 'Ctrl+R', desc: 'History' },
+        { key: 'BTab', label: 'Shift+Tab', desc: 'Permissions' },
+        { key: 'M-m', label: 'Alt+M', desc: 'Permissions' },
+        { key: 'M-p', label: 'Alt+P', desc: 'Model' },
+        { key: 'M-t', label: 'Alt+T', desc: 'Thinking' },
+        { key: 'C-y', label: 'Ctrl+Y', desc: 'Paste' },
+      ],
+      gemini: [
+        { key: 'C-c', label: 'Ctrl+C', desc: 'Cancel/Quit', danger: true },
+        { key: 'C-d', label: 'Ctrl+D', desc: 'Exit', danger: true },
+        { key: 'Escape', label: 'Esc', desc: 'Dismiss' },
+        { key: 'Escape Escape', label: 'Esc Esc', desc: 'Rewind', delay: 100 },
+        { key: 'C-y', label: 'Ctrl+Y', desc: 'YOLO Mode' },
+        { key: 'BTab', label: 'Shift+Tab', desc: 'Auto Edit' },
+        { key: 'C-l', label: 'Ctrl+L', desc: 'Clear' },
+        { key: 'C-t', label: 'Ctrl+T', desc: 'TODO List' },
+        { key: 'C-s', label: 'Ctrl+S', desc: 'Copy Mode' },
+        { key: 'C-g', label: 'Ctrl+G', desc: 'IDE Context' },
+        { key: 'C-x', label: 'Ctrl+X', desc: 'Editor' },
+        { key: 'C-j', label: 'Ctrl+J', desc: 'Newline' },
+        { key: 'F12', label: 'F12', desc: 'Errors' },
+      ],
+      codex: [
+        { key: 'C-c', label: 'Ctrl+C', desc: 'Close', danger: true },
+        { key: 'C-g', label: 'Ctrl+G', desc: 'Editor' },
+        { key: 'C-o', label: 'Ctrl+O', desc: 'Cloud Env' },
+        { key: 'Escape Escape', label: 'Esc Esc', desc: 'Edit Prev', delay: 100 },
+        { key: 'C-k', label: 'Ctrl+K', desc: 'Search' },
+        { key: 'Enter', label: 'Enter', desc: 'Submit' },
+        { key: 'Tab', label: 'Tab', desc: 'Insert Path' },
+      ],
+      opencode: [
+        { key: 'C-c', label: 'Ctrl+C', desc: 'Exit/Clear', danger: true },
+        { key: 'C-d', label: 'Ctrl+D', desc: 'Exit', danger: true },
+        { key: 'Escape', label: 'Esc', desc: 'Interrupt' },
+        { key: 'C-p', label: 'Ctrl+P', desc: 'Palette' },
+        { key: 'C-z', label: 'Ctrl+Z', desc: 'Suspend' },
+        { key: 'Tab', label: 'Tab', desc: 'Next Agent' },
+        { key: 'BTab', label: 'Shift+Tab', desc: 'Prev Agent' },
+        { key: 'F2', label: 'F2', desc: 'Cycle Models' },
+        { key: 'S-F2', label: 'Shift+F2', desc: 'Models Rev' },
+        { key: 'C-x', label: 'Ctrl+X', desc: 'Leader' },
+      ],
+    };
+
+    function updateSpecialKeys() {
+      const tool = document.getElementById('tool-filter').value;
+      const grid = document.getElementById('special-keys-grid');
+      const keys = SPECIAL_KEYS[tool] || SPECIAL_KEYS.common;
+
+      grid.innerHTML = keys.map(k => `
+        <button class="special-key-btn ${k.danger ? 'danger' : ''}"
+                onclick="sendSpecialKey('${k.key}', ${k.delay || 0})"
+                title="${k.desc}">
+          <span class="key-label">${k.label}</span>
+          <span class="key-desc">${k.desc}</span>
+        </button>
+      `).join('');
+    }
+
+    async function sendSpecialKey(key, delay = 0) {
+      if (!currentSession) return;
+
+      const response = await fetch('/api/send-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session: currentSession, key, delay })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        showKeyFeedback(`Sent: ${key}`);
+        setTimeout(() => viewOutput(currentSession, true), 500);
+      } else {
+        alert('Failed to send key: ' + result.error);
+      }
+    }
+
+    function showKeyFeedback(message) {
+      const feedback = document.getElementById('key-feedback');
+      feedback.textContent = message;
+      feedback.classList.add('visible');
+      setTimeout(() => feedback.classList.remove('visible'), 1500);
+    }
+
+    async function fetchSessions() {
+      try {
+        const response = await fetch('/api/sessions');
+        const sessions = await response.json();
+        renderSessions(sessions);
+        updateStats(sessions);
+      } catch (e) {
+        console.error('Failed to fetch sessions:', e);
+      }
+    }
+
+    function updateStats(sessions) {
+      document.getElementById('total-sessions').textContent = sessions.length;
+      document.getElementById('active-sessions').textContent =
+        sessions.filter(s => s.status === 'active').length;
+    }
+
+    function renderSessions(sessions) {
+      // Store sessions data globally for displayName lookup
+      currentSessionsData = sessions;
+
+      // Separate orchestrator from regular sessions
+      const orchestrator = sessions.find(s => s.isOrchestrator);
+      const regularSessions = sessions.filter(s => !s.isOrchestrator);
+
+      // Update orchestrator panel
+      const orchestratorPanel = document.getElementById('orchestrator-panel');
+      if (orchestrator) {
+        orchestratorPanel.classList.remove('hidden');
+
+        const timeSince = orchestrator.lastSeen
+          ? formatTimeSince(Date.now() - orchestrator.lastSeen)
+          : 'Never';
+        const responseAgeMs = orchestrator.lastResponseAt
+          ? Date.now() - orchestrator.lastResponseAt
+          : null;
+        const responseSince = responseAgeMs !== null
+          ? formatTimeSince(responseAgeMs)
+          : 'Never';
+
+        document.getElementById('orchestrator-status').textContent = orchestrator.status;
+        document.getElementById('orchestrator-status').className = `status ${orchestrator.status}`;
+        document.getElementById('orchestrator-last-seen').textContent = timeSince;
+        document.getElementById('orchestrator-last-response').textContent = responseSince;
+        const activityEl = document.getElementById('orchestrator-activity');
+        activityEl.textContent = orchestrator.lastActivity;
+        activityEl.className = `orchestrator-stat-value activity-indicator ${orchestrator.lastActivity}`;
+        document.getElementById('orchestrator-windows').textContent = orchestrator.windows;
+
+        const cwdEl = document.getElementById('orchestrator-cwd');
+        cwdEl.textContent = '📁 ' + truncatePath(orchestrator.cwd);
+        cwdEl.title = orchestrator.cwd || '';
+      } else {
+        orchestratorPanel.classList.add('hidden');
+      }
+
+      // Render regular sessions grid
+      const grid = document.getElementById('sessions-grid');
+      if (regularSessions.length === 0) {
+        grid.innerHTML = `
+          <div class="empty-state">
+            <h2>No active sessions</h2>
+            <p>Spawn a coder session to get started!</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Build session lookup map
+      const sessionMap = new Map(regularSessions.map(s => [s.sessionId, s]));
+
+      // Identify root sessions (no parent or parent not in active sessions)
+      const rootSessions = regularSessions.filter(s =>
+        !s.parentSessionId || !sessionMap.has(s.parentSessionId)
+      );
+      const orderedRootSessions = rootSessions.slice().reverse();
+
+      // Build hierarchical groups
+      function renderSessionCard(session, isChild = false) {
+        const timeSince = session.lastSeen
+          ? formatTimeSince(Date.now() - session.lastSeen)
+          : 'Never';
+        const responseAgeMs = session.lastResponseAt
+          ? Date.now() - session.lastResponseAt
+          : null;
+        const responseSince = responseAgeMs !== null
+          ? formatTimeSince(responseAgeMs)
+          : 'Never';
+        const isTyping = responseAgeMs !== null && responseAgeMs <= 5000;
+        const isStale = responseAgeMs !== null && responseAgeMs > 5 * 60 * 1000;
+        const typingIndicator = isTyping
+          ? `<span class="typing-indicator" title="Recent response">
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+            </span>`
+          : '';
+
+        const signature = JSON.stringify({
+          status: session.status,
+          lastSeen: session.lastSeen,
+          lastResponseAt: session.lastResponseAt,
+          windows: session.windows,
+          lastActivity: session.lastActivity,
+          paneId: session.paneId
+        });
+        const previousSignature = sessionSignatures.get(session.sessionId);
+        const isUpdated = previousSignature && previousSignature !== signature;
+        sessionSignatures.set(session.sessionId, signature);
+
+        const hasChildren = session.children && session.children.length > 0;
+        const parentBadge = hasChildren ? `<span class="parent-badge">Parent</span>` : '';
+        const childBadge = isChild ? `<span class="child-badge">Child</span>` : '';
+        const childrenCount = hasChildren
+          ? `<span class="children-count">
+              <svg viewBox="0 0 16 16" fill="currentColor">
+                <path d="M5 3.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm0 5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm0 5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM7.75 3.25a.75.75 0 0 0 0 1.5h5.5a.75.75 0 0 0 0-1.5h-5.5Zm0 5a.75.75 0 0 0 0 1.5h5.5a.75.75 0 0 0 0-1.5h-5.5Zm0 5a.75.75 0 0 0 0 1.5h5.5a.75.75 0 0 0 0-1.5h-5.5Z"/>
+              </svg>
+              ${session.children.length} child${session.children.length > 1 ? 'ren' : ''}
+            </span>`
+          : '';
+
+        const parentLink = isChild && session.parentSessionId
+          ? `<div class="parent-link">↳ Child of <a href="#" onclick="scrollToSession('${session.parentSessionId}'); return false;">${session.parentSessionId}</a></div>`
+          : '';
+
+        const heartbeatClass = session.hasHeartbeat ? 'has-heartbeat' : 'no-heartbeat';
+        const heartbeatTitle = session.hasHeartbeat ? 'Heartbeat active' : 'No heartbeat';
+
+        // Use displayName if available, otherwise fall back to sessionId
+        const nameDisplay = session.displayName
+          ? `<div class="session-name-container">
+               <div class="session-display-name">${session.displayName}${parentBadge}${childBadge}${childrenCount}</div>
+               <div class="session-id">${session.sessionId}</div>
+             </div>`
+          : `<div class="session-name">${session.sessionId}${parentBadge}${childBadge}${childrenCount}</div>`;
+
+        return `
+          <div class="session-card ${isStale ? 'stale' : ''} ${isUpdated ? 'pulse' : ''} ${hasChildren ? 'parent' : ''}" id="session-${session.sessionId.replace(/[^a-zA-Z0-9-]/g, '-')}">
+            <div class="session-header">
+              ${nameDisplay}
+              <div class="status ${session.status}">${session.status}</div>
+            </div>
+            <div class="session-info">
+              ${parentLink}
+              <div>
+                <span class="heartbeat-indicator ${heartbeatClass}" title="${heartbeatTitle}"></span>
+                Last seen: ${timeSince}
+              </div>
+              <div>Last output: ${responseSince} ${typingIndicator}</div>
+              <div>Windows: ${session.windows}</div>
+              ${session.cwd ? `<div title="${session.cwd}">📁 ${truncatePath(session.cwd)}</div>` : ''}
+            </div>
+            <div class="actions">
+              <button onclick="viewOutput('${session.sessionId}')">View Output</button>
+              <button onclick="attachSession('${session.sessionId}')">Attach (tmux)</button>
+              <button onclick="killSession('${session.sessionId}')">Kill</button>
+            </div>
+          </div>
+        `;
+      }
+
+      function renderSessionGroup(session) {
+        const childSessions = (session.children || [])
+          .map(childId => sessionMap.get(childId))
+          .filter(Boolean);
+        const orderedChildren = childSessions.slice().reverse();
+
+        if (orderedChildren.length === 0) {
+          return renderSessionCard(session, false);
+        }
+
+        const childrenHtml = orderedChildren.map(child => {
+          // Recursively render child groups if they have their own children
+          const grandchildren = (child.children || [])
+            .map(id => sessionMap.get(id))
+            .filter(Boolean);
+          if (grandchildren.length > 0) {
+            return renderSessionGroup(child);
+          }
+          return renderSessionCard(child, true);
+        }).join('');
+
+        return `
+          <div class="session-group">
+            ${renderSessionCard(session, false)}
+            <div class="children-container">
+              ${childrenHtml}
+            </div>
+          </div>
+        `;
+      }
+
+      grid.innerHTML = orderedRootSessions.map(session => renderSessionGroup(session)).join('');
+
+      const activeIds = new Set(regularSessions.map(s => s.sessionId));
+      for (const sessionId of sessionSignatures.keys()) {
+        if (!activeIds.has(sessionId)) {
+          sessionSignatures.delete(sessionId);
+        }
+      }
+    }
+
+    function scrollToSession(sessionId) {
+      const el = document.getElementById('session-' + sessionId.replace(/[^a-zA-Z0-9-]/g, '-'));
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('pulse');
+        setTimeout(() => el.classList.remove('pulse'), 1500);
+      }
+    }
+
+    function formatTimeSince(ms) {
+      const seconds = Math.floor(ms / 1000);
+      if (seconds < 60) return `${seconds}s ago`;
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes}m ago`;
+      const hours = Math.floor(minutes / 60);
+      return `${hours}h ago`;
+    }
+
+    function truncatePath(path) {
+      if (!path) return 'unknown';
+      const maxLen = 45;
+      if (path.length <= maxLen) return path;
+      // Replace home directory with ~
+      const home = path.match(/^\/Users\/[^/]+/) || path.match(/^\/home\/[^/]+/);
+      const normalized = home ? path.replace(home[0], '~') : path;
+      if (normalized.length <= maxLen) return normalized;
+      // Show .../ + last 2 path components
+      const parts = normalized.split('/');
+      if (parts.length > 2) {
+        return '.../' + parts.slice(-2).join('/');
+      }
+      return normalized.slice(-maxLen);
+    }
+
+    const ansiUp = new AnsiUp();
+
+    async function viewOutput(sessionId, isRefresh = false) {
+      if (!isRefresh) {
+        currentSession = sessionId;
+        // Find displayName from sessions data
+        const sessionData = currentSessionsData.find(s => s.sessionId === sessionId);
+        const title = sessionData?.displayName
+          ? `${sessionData.displayName} (${sessionId})`
+          : sessionId;
+        document.getElementById('output-session-name').textContent = title;
+        document.getElementById('output-panel').classList.add('visible');
+        document.getElementById('message-input').value = '';
+      }
+
+      const response = await fetch(`/api/output?session=${sessionId}&lines=50`);
+      const data = await response.json();
+      
+      const content = document.getElementById('output-content');
+      const isAtBottom = content.scrollHeight - content.scrollTop === content.clientHeight;
+
+      const html = ansiUp.ansi_to_html(data.output);
+      content.innerHTML = html;
+
+      // Auto-scroll to bottom only if we were already there or it's a fresh open
+      if (!isRefresh || isAtBottom) {
+        content.scrollTop = content.scrollHeight;
+      }
+    }
+
+    function closeOutput() {
+      document.getElementById('output-panel').classList.remove('visible');
+      currentSession = null;
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('message-input');
+      const message = input.value.trim();
+
+      if (!message || !currentSession) return;
+
+      const response = await fetch('/api/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session: currentSession, message })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        input.value = '';
+        // Refresh output after a delay
+        setTimeout(() => viewOutput(currentSession), 2000);
+      } else {
+        alert('Failed to send message: ' + result.error);
+      }
+    }
+
+    function attachSession(sessionId) {
+      alert(`To attach to this session, run:\n\ntmux attach -t ${sessionId}`);
+    }
+
+    async function sendToOrchestrator() {
+      const input = document.getElementById('orchestrator-input');
+      const message = input.value.trim();
+
+      if (!message) return;
+
+      const response = await fetch('/api/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session: 'coder-orchestrator', message })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        input.value = '';
+        // Show success feedback
+        const originalPlaceholder = input.placeholder;
+        input.placeholder = '✓ Sent successfully!';
+        setTimeout(() => {
+          input.placeholder = originalPlaceholder;
+        }, 2000);
+      } else {
+        alert('Failed to send message: ' + result.error);
+      }
+    }
+
+    function viewOrchestratorOutput() {
+      viewOutput('coder-orchestrator');
+    }
+
+    async function killSession(sessionId) {
+      const confirmed = confirm(`Kill session "${sessionId}"? This cannot be undone.`);
+      if (!confirmed) return;
+
+      try {
+        const response = await fetch('/api/kill', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session: sessionId })
+        });
+
+        const result = await response.json();
+        if (!result.success) {
+          alert(`Failed to kill session: ${result.error}`);
+          return;
+        }
+
+        if (currentSession === sessionId) {
+          closeOutput();
+        }
+        fetchSessions();
+      } catch (e) {
+        alert(`Failed to kill session: ${e.message}`);
+      }
+    }
+
+    // Handle Enter key in message inputs
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('message-input')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+      });
+
+      document.getElementById('orchestrator-input')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendToOrchestrator();
+      });
+
+      // Initialize special keys grid
+      updateSpecialKeys();
+
+      // Start SSE
+      setupSSE();
+      // Also fetch once immediately
+      fetchSessions();
+    });
+
+    // Server-Sent Events
+    function setupSSE() {
+      const evtSource = new EventSource("/api/events");
+      
+      evtSource.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          
+          if (payload.type === 'sessions') {
+            renderSessions(payload.data);
+            updateStats(payload.data);
+          }
+        } catch (e) {
+          console.error('SSE Parse Error:', e);
+        }
+      };
+
+      evtSource.onerror = (err) => {
+        console.error("EventSource failed:", err);
+        // EventSource auto-reconnects, but if it fails permanently we might want to warn
+      };
+    }
+
+    // Auto-refresh output if active
+    updateInterval = setInterval(() => {
+      if (currentSession) {
+        viewOutput(currentSession, true);
+      }
+    }, 3000);
+  </script>
+</body>
+</html>
