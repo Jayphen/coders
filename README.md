@@ -6,10 +6,10 @@ Spawn AI coding assistants (Claude, Gemini, Codex, OpenCode) in isolated tmux se
 
 This is a monorepo containing:
 
-| Package | Description | npm |
-|---------|-------------|-----|
-| [`@jayphen/coders`](./packages/plugin) | Claude Code plugin for spawning AI sessions | [![npm](https://img.shields.io/npm/v/@jayphen/coders)](https://www.npmjs.com/package/@jayphen/coders) |
-| [`@jayphen/coders-tui`](./packages/tui) | Terminal UI for managing sessions | Coming soon |
+| Package | Description | |
+|---------|-------------|---|
+| [`@jayphen/coders`](./packages/plugin) | Claude Code plugin for spawning AI sessions | [Install via Claude](https://github.com/Jayphen/coders#claude-code-plugin-recommended) |
+| [`@jayphen/coders-tui`](./packages/tui) | Terminal UI for managing sessions | [![npm](https://img.shields.io/npm/v/@jayphen/coders-tui)](https://www.npmjs.com/package/@jayphen/coders-tui) |
 
 ## Quick Start
 

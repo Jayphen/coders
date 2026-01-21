@@ -781,37 +781,63 @@ async function restartDashboard() {
 }
 
 function launchTui() {
-  // Get the path to the TUI package (sibling package in monorepo)
   const scriptDir = path.dirname(new URL(import.meta.url).pathname);
-  const tuiPath = path.resolve(scriptDir, '../../../../tui/dist/cli.js');
+
+  // 1. Check for local development paths first (monorepo dev mode)
   const tuiDevPath = path.resolve(scriptDir, '../../../../tui/src/cli.tsx');
+  const tuiBuiltPath = path.resolve(scriptDir, '../../../../tui/dist/cli.js');
 
-  // Check if built version exists, otherwise fall back to dev mode
-  let tuiScript = tuiPath;
-  let runner = 'node';
-
-  if (!fs.existsSync(tuiPath)) {
-    if (fs.existsSync(tuiDevPath)) {
-      tuiScript = tuiDevPath;
-      runner = 'tsx';
-      log(`📦 Using development mode (tsx)`, 'yellow');
-    } else {
-      log(`❌ TUI not found. Please build the TUI package first:`, 'red');
-      log(`   cd packages/tui && pnpm build`, 'yellow');
-      return;
-    }
+  if (fs.existsSync(tuiBuiltPath)) {
+    log(`🖥️  Launching TUI...`, 'blue');
+    runTui('node', tuiBuiltPath);
+    return;
   }
 
-  log(`🖥️  Launching TUI...`, 'blue');
+  if (fs.existsSync(tuiDevPath)) {
+    log(`📦 Using development mode (tsx)`, 'yellow');
+    runTui('tsx', tuiDevPath);
+    return;
+  }
+
+  // 2. Check cache directory for installed TUI
+  const cacheDir = path.join(os.homedir(), '.cache', 'coders-tui');
+  const cachedTui = path.join(cacheDir, 'node_modules', '@jayphen', 'coders-tui', 'dist', 'cli.js');
+
+  if (fs.existsSync(cachedTui)) {
+    log(`🖥️  Launching TUI...`, 'blue');
+    runTui('node', cachedTui);
+    return;
+  }
+
+  // 3. Install TUI on first use
+  log(`📦 Installing TUI (first time only)...`, 'yellow');
 
   try {
-    // The TUI handles its own tmux session creation (coders-tui)
-    // Just spawn it and let it take over
-    const result = spawnSync(runner, [tuiScript], {
+    fs.mkdirSync(cacheDir, { recursive: true });
+
+    execSync('npm install @jayphen/coders-tui@latest', {
+      cwd: cacheDir,
+      stdio: 'inherit'
+    });
+
+    if (fs.existsSync(cachedTui)) {
+      log(`🖥️  Launching TUI...`, 'blue');
+      runTui('node', cachedTui);
+    } else {
+      log(`❌ TUI installation failed - cli.js not found`, 'red');
+    }
+  } catch (e) {
+    log(`❌ Failed to install TUI: ${e.message}`, 'red');
+    log(`   You can try manually: npm install -g @jayphen/coders-tui`, 'yellow');
+  }
+}
+
+function runTui(runner, script) {
+  try {
+    const result = spawnSync(runner, [script], {
       stdio: 'inherit',
       env: process.env
     });
-
     if (result.error) {
       throw result.error;
     }

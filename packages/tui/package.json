@@ -7,6 +7,9 @@
   "bin": {
     "coders-tui": "./dist/cli.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "tsx src/cli.tsx",
     "watch": "tsx watch --clear-screen=false src/cli.tsx",
@@ -15,6 +18,11 @@
   },
   "author": "Jayphen",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jayphen/coders",
+    "directory": "packages/tui"
+  },
   "dependencies": {
     "ink": "^5.0.1",
     "ink-select-input": "^6.0.0",
@@ -27,8 +35,5 @@
     "@types/react": "^18.2.0",
     "tsx": "^4.7.0",
     "typescript": "^5.9.3"
-  },
-  "peerDependencies": {
-    "@jayphen/coders": "workspace:*"
   }
 }
