@@ -11,6 +11,56 @@ interface Props {
   version?: string;
 }
 
+function areSessionsEqual(prev: Session[], next: Session[]): boolean {
+  if (prev === next) return true;
+  if (prev.length !== next.length) return false;
+  for (let i = 0; i < prev.length; i += 1) {
+    const a = prev[i];
+    const b = next[i];
+    if (
+      a.name !== b.name ||
+      a.tool !== b.tool ||
+      a.task !== b.task ||
+      a.cwd !== b.cwd ||
+      a.isOrchestrator !== b.isOrchestrator ||
+      a.heartbeatStatus !== b.heartbeatStatus ||
+      a.hasPromise !== b.hasPromise ||
+      a.parentSessionId !== b.parentSessionId
+    ) {
+      return false;
+    }
+
+    if ((a.createdAt?.getTime() ?? 0) !== (b.createdAt?.getTime() ?? 0)) {
+      return false;
+    }
+
+    const aPromise = a.promise;
+    const bPromise = b.promise;
+    if (
+      aPromise?.status !== bPromise?.status ||
+      aPromise?.summary !== bPromise?.summary ||
+      aPromise?.timestamp !== bPromise?.timestamp ||
+      (aPromise?.blockers?.join('|') ?? '') !== (bPromise?.blockers?.join('|') ?? '') ||
+      (aPromise?.filesChanged?.join('|') ?? '') !== (bPromise?.filesChanged?.join('|') ?? '')
+    ) {
+      return false;
+    }
+
+    const aUsage = a.usage;
+    const bUsage = b.usage;
+    if (
+      aUsage?.cost !== bUsage?.cost ||
+      aUsage?.tokens !== bUsage?.tokens ||
+      aUsage?.apiCalls !== bUsage?.apiCalls ||
+      aUsage?.sessionLimitPercent !== bUsage?.sessionLimitPercent ||
+      aUsage?.weeklyLimitPercent !== bUsage?.weeklyLimitPercent
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function App({ version }: Props) {
   const { exit } = useApp();
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -25,8 +75,16 @@ export function App({ version }: Props) {
     try {
       if (showLoading) setInitialLoading(true);
       const tmuxSessions = await getTmuxSessions();
+      const hasChanges = !areSessionsEqual(sessionsRef.current, tmuxSessions);
       sessionsRef.current = tmuxSessions;
-      setSessions(tmuxSessions);
+      if (hasChanges) {
+        setSessions(tmuxSessions);
+        setSelectedIndex(current =>
+          tmuxSessions.length > 0 && current >= tmuxSessions.length
+            ? tmuxSessions.length - 1
+            : current
+        );
+      }
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to get sessions');

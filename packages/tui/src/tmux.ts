@@ -1,4 +1,4 @@
-import { execSync, spawn, spawnSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import type { Session, CoderPromise, HeartbeatData } from './types.js';
 
 const PROMISE_KEY_PREFIX = 'coders:promise:';
@@ -13,40 +13,73 @@ export function getCurrentSession(): string | null {
   }
 }
 
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+function scanRedisKeys(prefix: string): string[] {
+  try {
+    const keysOutput = execSync(
+      `redis-cli --no-auth-warning --raw --scan --pattern "${prefix}*" 2>/dev/null`,
+      { encoding: 'utf-8', timeout: 2000 }
+    ).trim();
+    if (!keysOutput) return [];
+    return keysOutput.split('\n').filter(k => k.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function mgetRedisValues(keys: string[]): string[] {
+  if (keys.length === 0) return [];
+  try {
+    const output = execSync(
+      `redis-cli --no-auth-warning --raw MGET ${keys.map(k => `"${k}"`).join(' ')} 2>/dev/null`,
+      { encoding: 'utf-8', timeout: 2000 }
+    );
+    return output.split('\n');
+  } catch {
+    return [];
+  }
+}
+
+function getRedisJsonMap(prefix: string): Map<string, string> {
+  const values = new Map<string, string>();
+  const keys = scanRedisKeys(prefix);
+  if (keys.length === 0) return values;
+
+  const batches = chunk(keys, 50);
+  for (const batch of batches) {
+    const batchValues = mgetRedisValues(batch);
+    batch.forEach((key, index) => {
+      const value = batchValues[index];
+      if (value && value !== '(nil)') {
+        values.set(key, value);
+      }
+    });
+  }
+
+  return values;
+}
+
 /**
  * Query Redis for all session promises using redis-cli
  */
 function getPromises(): Map<string, CoderPromise> {
   const promises = new Map<string, CoderPromise>();
+  const values = getRedisJsonMap(PROMISE_KEY_PREFIX);
 
-  try {
-    // Get all promise keys
-    const keysOutput = execSync(
-      `redis-cli --no-auth-warning KEYS "${PROMISE_KEY_PREFIX}*" 2>/dev/null`,
-      { encoding: 'utf-8', timeout: 2000 }
-    ).trim();
-
-    if (!keysOutput) return promises;
-
-    const keys = keysOutput.split('\n').filter(k => k.length > 0);
-
-    for (const key of keys) {
-      try {
-        const value = execSync(
-          `redis-cli --no-auth-warning GET "${key}" 2>/dev/null`,
-          { encoding: 'utf-8', timeout: 1000 }
-        ).trim();
-
-        if (value) {
-          const promise = JSON.parse(value) as CoderPromise;
-          promises.set(promise.sessionId, promise);
-        }
-      } catch {
-        // Ignore individual key errors
-      }
+  for (const value of values.values()) {
+    try {
+      const promise = JSON.parse(value) as CoderPromise;
+      promises.set(promise.sessionId, promise);
+    } catch {
+      // Ignore individual parse errors
     }
-  } catch {
-    // Redis not available or error - just return empty map
   }
 
   return promises;
@@ -57,38 +90,17 @@ function getPromises(): Map<string, CoderPromise> {
  */
 function getHeartbeats(): Map<string, HeartbeatData> {
   const heartbeats = new Map<string, HeartbeatData>();
+  const values = getRedisJsonMap(PANE_KEY_PREFIX);
 
-  try {
-    // Get all pane keys
-    const keysOutput = execSync(
-      `redis-cli --no-auth-warning KEYS "${PANE_KEY_PREFIX}*" 2>/dev/null`,
-      { encoding: 'utf-8', timeout: 2000 }
-    ).trim();
-
-    if (!keysOutput) return heartbeats;
-
-    const keys = keysOutput.split('\n').filter(k => k.length > 0);
-
-    for (const key of keys) {
-      try {
-        const value = execSync(
-          `redis-cli --no-auth-warning GET "${key}" 2>/dev/null`,
-          { encoding: 'utf-8', timeout: 1000 }
-        ).trim();
-
-        if (value) {
-          const data = JSON.parse(value) as HeartbeatData;
-          // Store by sessionId for easy lookup
-          if (data.sessionId) {
-            heartbeats.set(data.sessionId, data);
-          }
-        }
-      } catch {
-        // Ignore individual key errors
+  for (const value of values.values()) {
+    try {
+      const data = JSON.parse(value) as HeartbeatData;
+      if (data.sessionId) {
+        heartbeats.set(data.sessionId, data);
       }
+    } catch {
+      // Ignore individual parse errors
     }
-  } catch {
-    // Redis not available or error
   }
 
   return heartbeats;
