@@ -4,9 +4,10 @@ dist
 *.log
 .DS_Store
 
-# Markdown files except README.md
+# Markdown files except README.md and CLAUDE.md
 *.md
 !README.md
+!CLAUDE.md
 !**/commands/*.md
 !skills/**/*.md
 
