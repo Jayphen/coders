@@ -17,6 +17,17 @@ function formatAge(date: Date | undefined): string {
   return `${days}d ago`;
 }
 
+function formatTimestamp(timestamp: number | undefined): string {
+  if (!timestamp) return 'unknown';
+  return formatAge(new Date(timestamp));
+}
+
+const PROMISE_STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  completed: { label: 'Completed', color: 'green' },
+  blocked: { label: 'Blocked', color: 'red' },
+  'needs-review': { label: 'Needs Review', color: 'yellow' },
+};
+
 export function SessionDetail({ session }: Props) {
   if (!session) {
     return null;
@@ -26,48 +37,83 @@ export function SessionDetail({ session }: Props) {
     ? session.task.replace(/-/g, ' ')
     : 'No task specified';
 
+  const promiseStatusInfo = session.promise?.status
+    ? PROMISE_STATUS_LABELS[session.promise.status]
+    : null;
+
   return (
     <Box
       flexDirection="column"
       borderStyle="round"
-      borderColor="gray"
+      borderColor={session.hasPromise ? 'gray' : 'gray'}
       paddingX={2}
       paddingY={1}
       marginTop={1}
     >
       <Box marginBottom={1}>
-        <Text bold color="cyan">
+        <Text bold color={session.hasPromise ? 'gray' : 'cyan'}>
           {session.isOrchestrator ? '🎯 ' : ''}{session.name}
         </Text>
+        {session.hasPromise && promiseStatusInfo && (
+          <Text color={promiseStatusInfo.color}> [{promiseStatusInfo.label}]</Text>
+        )}
       </Box>
 
       <Box flexDirection="column" gap={0}>
+        {/* Show promise summary for completed sessions */}
+        {session.promise && (
+          <>
+            <Box>
+              <Box width={12}>
+                <Text dimColor>Summary:</Text>
+              </Box>
+              <Text wrap="wrap" color="green">{session.promise.summary}</Text>
+            </Box>
+
+            <Box>
+              <Box width={12}>
+                <Text dimColor>Finished:</Text>
+              </Box>
+              <Text>{formatTimestamp(session.promise.timestamp)}</Text>
+            </Box>
+
+            {session.promise.blockers && session.promise.blockers.length > 0 && (
+              <Box>
+                <Box width={12}>
+                  <Text dimColor>Blockers:</Text>
+                </Box>
+                <Text color="red">{session.promise.blockers.join(', ')}</Text>
+              </Box>
+            )}
+          </>
+        )}
+
         <Box>
           <Box width={12}>
             <Text dimColor>Task:</Text>
           </Box>
-          <Text wrap="wrap">{taskDisplay}</Text>
+          <Text wrap="wrap" dimColor={session.hasPromise}>{taskDisplay}</Text>
         </Box>
 
         <Box>
           <Box width={12}>
             <Text dimColor>Tool:</Text>
           </Box>
-          <Text>{session.tool}</Text>
+          <Text dimColor={session.hasPromise}>{session.tool}</Text>
         </Box>
 
         <Box>
           <Box width={12}>
             <Text dimColor>Directory:</Text>
           </Box>
-          <Text wrap="truncate-end">{session.cwd}</Text>
+          <Text wrap="truncate-end" dimColor={session.hasPromise}>{session.cwd}</Text>
         </Box>
 
         <Box>
           <Box width={12}>
             <Text dimColor>Created:</Text>
           </Box>
-          <Text>{formatAge(session.createdAt)}</Text>
+          <Text dimColor={session.hasPromise}>{formatAge(session.createdAt)}</Text>
         </Box>
 
         {session.parentSessionId && (
@@ -75,7 +121,7 @@ export function SessionDetail({ session }: Props) {
             <Box width={12}>
               <Text dimColor>Parent:</Text>
             </Box>
-            <Text>{session.parentSessionId}</Text>
+            <Text dimColor={session.hasPromise}>{session.parentSessionId}</Text>
           </Box>
         )}
       </Box>

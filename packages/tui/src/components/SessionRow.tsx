@@ -20,16 +20,32 @@ const STATUS_INDICATORS: Record<NonNullable<Session['heartbeatStatus']>, { symbo
   dead: { symbol: '○', color: 'red' },
 };
 
+const PROMISE_STATUS_INDICATORS: Record<string, { symbol: string; color: string }> = {
+  completed: { symbol: '✓', color: 'green' },
+  blocked: { symbol: '!', color: 'red' },
+  'needs-review': { symbol: '?', color: 'yellow' },
+};
+
 export function SessionRow({ session, isSelected }: Props) {
   const toolColor = TOOL_COLORS[session.tool];
-  const status = STATUS_INDICATORS[session.heartbeatStatus || 'healthy'];
+  const heartbeatStatus = STATUS_INDICATORS[session.heartbeatStatus || 'healthy'];
+
+  // Use promise status if available, otherwise use heartbeat status
+  const promiseStatus = session.promise?.status
+    ? PROMISE_STATUS_INDICATORS[session.promise.status]
+    : null;
 
   const displayName = session.isOrchestrator
     ? 'orchestrator'
     : session.name.replace('coder-', '');
 
-  const truncatedTask = session.task
-    ? (session.task.length > 18 ? session.task.slice(0, 15) + '...' : session.task)
+  // For completed sessions, show promise summary; otherwise show task
+  const displayText = session.promise
+    ? session.promise.summary
+    : session.task;
+
+  const truncatedText = displayText
+    ? (displayText.length > 18 ? displayText.slice(0, 15) + '...' : displayText)
     : '-';
 
   return (
@@ -42,8 +58,9 @@ export function SessionRow({ session, isSelected }: Props) {
 
       <Box width={28}>
         <Text
-          color={session.isOrchestrator ? 'cyan' : undefined}
+          color={session.isOrchestrator ? 'cyan' : session.hasPromise ? 'gray' : undefined}
           bold={session.isOrchestrator || isSelected}
+          dimColor={session.hasPromise && !isSelected}
         >
           {session.isOrchestrator ? '🎯 ' : session.parentSessionId ? '├─ ' : ''}
           {displayName.slice(0, session.isOrchestrator ? 24 : 22)}
@@ -51,21 +68,27 @@ export function SessionRow({ session, isSelected }: Props) {
       </Box>
 
       <Box width={10}>
-        <Text color={toolColor}>
+        <Text color={toolColor} dimColor={session.hasPromise}>
           {session.tool}
         </Text>
       </Box>
 
       <Box width={20}>
-        <Text dimColor={!session.task}>
-          {truncatedTask}
+        <Text dimColor={!displayText || session.hasPromise}>
+          {truncatedText}
         </Text>
       </Box>
 
       <Box width={8}>
-        <Text color={status.color}>
-          {status.symbol}
-        </Text>
+        {promiseStatus ? (
+          <Text color={promiseStatus.color}>
+            {promiseStatus.symbol}
+          </Text>
+        ) : (
+          <Text color={heartbeatStatus.color}>
+            {heartbeatStatus.symbol}
+          </Text>
+        )}
       </Box>
     </Box>
   );

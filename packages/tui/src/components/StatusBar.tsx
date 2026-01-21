@@ -2,9 +2,12 @@ import { Box, Text } from 'ink';
 
 interface Props {
   sessionCount: number;
+  completedCount?: number;
 }
 
-export function StatusBar({ sessionCount }: Props) {
+export function StatusBar({ sessionCount, completedCount = 0 }: Props) {
+  const activeCount = sessionCount - completedCount;
+
   return (
     <Box
       marginTop={1}
@@ -20,7 +23,10 @@ export function StatusBar({ sessionCount }: Props) {
       <Box>
         <Box flexGrow={1}>
           <Text dimColor>
-            {sessionCount} session{sessionCount !== 1 ? 's' : ''}
+            {activeCount} active
+            {completedCount > 0 && (
+              <Text color="gray">, {completedCount} completed</Text>
+            )}
           </Text>
         </Box>
 
@@ -36,9 +42,19 @@ export function StatusBar({ sessionCount }: Props) {
       </Box>
 
       <Box marginTop={0}>
-        <Text dimColor>
-          Return to TUI: <Text color="yellow">Ctrl-b L</Text> (last session)
-        </Text>
+        <Box flexGrow={1}>
+          <Text dimColor>
+            Return to TUI: <Text color="yellow">Ctrl-b L</Text> (last session)
+          </Text>
+        </Box>
+        {completedCount > 0 && (
+          <Box>
+            <Text dimColor>
+              <Text color="cyan">R</Text> resume
+              <Text color="cyan"> C</Text> kill all completed
+            </Text>
+          </Box>
+        )}
       </Box>
     </Box>
   );

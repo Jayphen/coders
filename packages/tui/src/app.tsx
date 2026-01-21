@@ -5,7 +5,7 @@ import { SessionDetail } from './components/SessionDetail.js';
 import { StatusBar } from './components/StatusBar.js';
 import { Header } from './components/Header.js';
 import type { Session } from './types.js';
-import { getTmuxSessions, attachSession, killSession } from './tmux.js';
+import { getTmuxSessions, attachSession, killSession, killCompletedSessions, resumeSession } from './tmux.js';
 
 export function App() {
   const { exit } = useApp();
@@ -13,6 +13,8 @@ export function App() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [confirmKillCompleted, setConfirmKillCompleted] = useState(false);
   const sessionsRef = useRef<Session[]>([]);
 
   const refreshSessions = useCallback(async (showLoading = false) => {
@@ -35,7 +37,34 @@ export function App() {
     return () => clearInterval(interval);
   }, [refreshSessions]);
 
+  // Clear status message after 3 seconds
+  useEffect(() => {
+    if (statusMessage) {
+      const timeout = setTimeout(() => setStatusMessage(null), 3000);
+      return () => clearTimeout(timeout);
+    }
+  }, [statusMessage]);
+
   useInput(useCallback((input: string, key: { upArrow?: boolean; downArrow?: boolean; return?: boolean }) => {
+    // Handle confirmation dialog
+    if (confirmKillCompleted) {
+      if (input === 'y' || input === 'Y') {
+        setConfirmKillCompleted(false);
+        killCompletedSessions().then(({ killed, failed }) => {
+          if (killed.length > 0) {
+            setStatusMessage(`Killed ${killed.length} completed session(s)`);
+          } else {
+            setStatusMessage('No completed sessions to kill');
+          }
+          refreshSessions(false);
+        });
+      } else if (input === 'n' || input === 'N' || key.return) {
+        setConfirmKillCompleted(false);
+        setStatusMessage('Cancelled');
+      }
+      return;
+    }
+
     if (input === 'q') {
       exit();
       return;
@@ -74,13 +103,58 @@ export function App() {
       }
       return;
     }
-  }, [exit, refreshSessions, selectedIndex]));
+
+    // Bulk kill completed sessions (Shift+C)
+    if (input === 'C') {
+      const completedCount = sessionsRef.current.filter(s => s.hasPromise && !s.isOrchestrator).length;
+      if (completedCount > 0) {
+        setConfirmKillCompleted(true);
+      } else {
+        setStatusMessage('No completed sessions to kill');
+      }
+      return;
+    }
+
+    // Resume selected session (clear its promise)
+    if (input === 'R') {
+      const session = sessionsRef.current[selectedIndex];
+      if (session?.hasPromise) {
+        const success = resumeSession(session.name);
+        if (success) {
+          setStatusMessage(`Resumed: ${session.name.replace('coder-', '')}`);
+        } else {
+          setStatusMessage('Failed to resume session');
+        }
+        refreshSessions(false);
+      } else {
+        setStatusMessage('Selected session is not completed');
+      }
+      return;
+    }
+  }, [exit, refreshSessions, selectedIndex, confirmKillCompleted]));
 
   const selectedSession = sessions[selectedIndex] || null;
+  const completedCount = sessions.filter(s => s.hasPromise && !s.isOrchestrator).length;
 
   return (
     <Box flexDirection="column" padding={1}>
       <Header />
+
+      {/* Confirmation dialog */}
+      {confirmKillCompleted && (
+        <Box marginY={1} paddingX={2} paddingY={1} borderStyle="round" borderColor="yellow">
+          <Text color="yellow">
+            Kill all {completedCount} completed session(s)? (y/n)
+          </Text>
+        </Box>
+      )}
+
+      {/* Status message */}
+      {statusMessage && !confirmKillCompleted && (
+        <Box marginY={1} paddingX={2}>
+          <Text color="cyan">{statusMessage}</Text>
+        </Box>
+      )}
 
       {error ? (
         <Box marginY={1}>
@@ -97,7 +171,7 @@ export function App() {
         </>
       )}
 
-      <StatusBar sessionCount={sessions.length} />
+      <StatusBar sessionCount={sessions.length} completedCount={completedCount} />
     </Box>
   );
 }

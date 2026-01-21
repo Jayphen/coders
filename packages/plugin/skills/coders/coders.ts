@@ -38,7 +38,9 @@ import {
   getPaneId,
   injectPaneIdContext,
   RedisConfig,
-  HEARTBEAT_CHANNEL
+  HEARTBEAT_CHANNEL,
+  PROMISES_CHANNEL,
+  CoderPromise
 } from './redis';
 import { generateSessionName } from './scripts/session-name.js';
 import { generateSmartSessionName } from './scripts/ai-name-generator.js';
@@ -547,9 +549,91 @@ export async function listenForMessages(
   if (!config?.url) {
     throw new Error('Redis not configured. Pass redis config or set global config.');
   }
-  
+
   const redis = new RedisManager(config);
   await redis.subscribeToChannel(channel, callback);
+}
+
+/**
+ * Publish a promise (completion summary) for the current session
+ */
+export async function publishPromise(
+  summary: string,
+  options?: {
+    status?: 'completed' | 'blocked' | 'needs-review';
+    filesChanged?: string[];
+    blockers?: string[];
+    redisConfig?: RedisConfig;
+  }
+): Promise<string> {
+  const config = options?.redisConfig || globalConfig.redis;
+  if (!config?.url) {
+    return '❌ Redis not configured. Promise requires Redis for coordination.';
+  }
+
+  const redis = new RedisManager(config);
+  await redis.connect();
+
+  try {
+    await redis.publishPromise({
+      summary,
+      status: options?.status || 'completed',
+      filesChanged: options?.filesChanged,
+      blockers: options?.blockers
+    });
+
+    const sessionId = process.env.CODERS_SESSION_ID || 'unknown';
+    const statusEmoji = options?.status === 'blocked' ? '🚫' :
+                        options?.status === 'needs-review' ? '👀' : '✅';
+
+    return `
+${statusEmoji} Promise published for session: ${sessionId}
+
+**Summary:** ${summary}
+**Status:** ${options?.status || 'completed'}
+${options?.filesChanged?.length ? `**Files Changed:** ${options.filesChanged.join(', ')}` : ''}
+${options?.blockers?.length ? `**Blockers:** ${options.blockers.join(', ')}` : ''}
+
+The orchestrator and dashboard have been notified.
+`;
+  } finally {
+    await redis.disconnect();
+  }
+}
+
+/**
+ * Resume a session by clearing its promise (marking it as active again)
+ */
+export async function resumeSession(
+  sessionName?: string,
+  redisConfig?: RedisConfig
+): Promise<string> {
+  const config = redisConfig || globalConfig.redis;
+  if (!config?.url) {
+    return '❌ Redis not configured. Resume requires Redis for coordination.';
+  }
+
+  const sessionId = sessionName
+    ? `${SESSION_PREFIX}${sessionName}`
+    : process.env.CODERS_SESSION_ID;
+
+  if (!sessionId) {
+    return '❌ No session ID provided or detected.';
+  }
+
+  const redis = new RedisManager(config);
+  await redis.connect();
+
+  try {
+    await redis.deletePromise(sessionId);
+    return `
+🔄 Session resumed: ${sessionId}
+
+The session has been marked as active again. The promise has been cleared.
+`;
+  } finally {
+    await redis.disconnect();
+  }
 }
 
 /**
@@ -571,11 +655,15 @@ export const coders = {
   configure,
   sendMessage,
   listenForMessages,
+  // Promise functions
+  publishPromise,
+  resumeSession,
   // Re-export from redis.ts
   RedisManager,
   getPaneId,
   injectPaneIdContext,
   HEARTBEAT_CHANNEL,
+  PROMISES_CHANNEL,
   // Tmux Resurrect
   snapshot,
   restore,

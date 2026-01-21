@@ -560,6 +560,8 @@ ${colors.green}Usage:${colors.reset}
   coders list
   coders attach <session>
   coders kill <session>
+  coders promise "summary" [--status <status>] [--blockers "reason"]
+  coders resume [session-name]
   coders dashboard
   coders restart-dashboard
   coders update-plugin [--plugin <name>]
@@ -578,6 +580,12 @@ ${colors.green}Orchestrator:${colors.reset}
 ${colors.green}TUI:${colors.reset}
   coders tui             - Open the terminal UI for managing sessions
                           (spawns in its own tmux session: coders-tui)
+
+${colors.green}Promise/Resume:${colors.reset}
+  coders promise "summary"      - Mark session as completed with a summary
+    --status <status>           Status: completed (default), blocked, needs-review
+    --blockers "reason"         Reason for being blocked
+  coders resume [session-name]  - Resume a completed session (make active again)
 
 ${colors.green}Plugin Update:${colors.reset}
   coders update-plugin   - Broadcast '/plugin update' to all active sessions
@@ -1005,6 +1013,130 @@ if (command === 'help' || !command) {
     }
   })().catch((err) => {
     log(`❌ Failed to spawn session: ${err.message}`, 'red');
+  });
+} else if (command === 'promise') {
+  // Parse promise arguments
+  let summary = null;
+  let status = 'completed';
+  let blockers = null;
+
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--status' && args[i + 1]) {
+      status = args[i + 1];
+      i++;
+    } else if (arg === '--blockers' && args[i + 1]) {
+      blockers = args[i + 1];
+      i++;
+    } else if (!arg.startsWith('--') && !summary) {
+      summary = arg;
+    }
+  }
+
+  if (!summary) {
+    log('Usage: coders promise "summary of what was done" [--status completed|blocked|needs-review] [--blockers "reason"]', 'red');
+    process.exit(1);
+  }
+
+  // Validate status
+  if (!['completed', 'blocked', 'needs-review'].includes(status)) {
+    log(`Invalid status: ${status}. Must be one of: completed, blocked, needs-review`, 'red');
+    process.exit(1);
+  }
+
+  (async () => {
+    const depsOk = await ensureDependencies();
+    if (!depsOk) {
+      log(`❌ Cannot publish promise without redis dependency.`, 'red');
+      return;
+    }
+
+    // Dynamic import of redis
+    const { createClient } = await import('redis');
+    const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+    const PROMISES_CHANNEL = 'coders:promises';
+    const PROMISE_KEY_PREFIX = 'coders:promise:';
+
+    const client = createClient({ url: REDIS_URL });
+    await client.connect();
+
+    const sessionId = process.env.CODERS_SESSION_ID || 'coder-unknown';
+    const promise = {
+      sessionId,
+      timestamp: Date.now(),
+      summary,
+      status,
+      blockers: blockers ? [blockers] : undefined
+    };
+
+    // Store the promise
+    const key = `${PROMISE_KEY_PREFIX}${sessionId}`;
+    await client.set(key, JSON.stringify(promise), { EX: 86400 }); // 24h TTL
+
+    // Publish to channel for real-time updates
+    await client.publish(PROMISES_CHANNEL, JSON.stringify(promise));
+
+    await client.quit();
+
+    const statusEmoji = status === 'blocked' ? '🚫' :
+                        status === 'needs-review' ? '👀' : '✅';
+    log(`\n${statusEmoji} Promise published for: ${sessionId}`, 'green');
+    log(`\n   Summary: ${summary}`, 'blue');
+    log(`   Status: ${status}`, 'blue');
+    if (blockers) {
+      log(`   Blockers: ${blockers}`, 'yellow');
+    }
+    log(`\nThe orchestrator and dashboard have been notified.`, 'green');
+  })().catch((err) => {
+    log(`❌ Failed to publish promise: ${err.message}`, 'red');
+  });
+} else if (command === 'resume') {
+  const sessionName = args[1];
+
+  (async () => {
+    const depsOk = await ensureDependencies();
+    if (!depsOk) {
+      log(`❌ Cannot resume without redis dependency.`, 'red');
+      return;
+    }
+
+    const { createClient } = await import('redis');
+    const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+    const PROMISE_KEY_PREFIX = 'coders:promise:';
+
+    const client = createClient({ url: REDIS_URL });
+    await client.connect();
+
+    // Determine session ID
+    let sessionId;
+    if (sessionName) {
+      sessionId = sessionName.startsWith('coder-') ? sessionName : `coder-${sessionName}`;
+    } else {
+      sessionId = process.env.CODERS_SESSION_ID;
+    }
+
+    if (!sessionId) {
+      log('Usage: coders resume [session-name]', 'red');
+      log('   If no session name is provided, the current session ID must be set in CODERS_SESSION_ID', 'yellow');
+      await client.quit();
+      process.exit(1);
+    }
+
+    // Delete the promise
+    const key = `${PROMISE_KEY_PREFIX}${sessionId}`;
+    const deleted = await client.del(key);
+
+    await client.quit();
+
+    if (deleted > 0) {
+      log(`\n🔄 Session resumed: ${sessionId}`, 'green');
+      log(`\nThe session has been marked as active again.`, 'blue');
+    } else {
+      log(`\n⚠️  No promise found for session: ${sessionId}`, 'yellow');
+      log(`   The session may already be active.`, 'yellow');
+    }
+  })().catch((err) => {
+    log(`❌ Failed to resume session: ${err.message}`, 'red');
   });
 } else {
   log(`Unknown command: ${command}`, 'red');

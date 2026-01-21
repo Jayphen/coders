@@ -1,5 +1,8 @@
 import { execSync, spawn, spawnSync } from 'child_process';
-import type { Session } from './types.js';
+import type { Session, CoderPromise } from './types.js';
+
+const PROMISE_KEY_PREFIX = 'coders:promise:';
+const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
 export function getCurrentSession(): string | null {
   try {
@@ -9,6 +12,45 @@ export function getCurrentSession(): string | null {
   }
 }
 
+/**
+ * Query Redis for all session promises using redis-cli
+ */
+function getPromises(): Map<string, CoderPromise> {
+  const promises = new Map<string, CoderPromise>();
+
+  try {
+    // Get all promise keys
+    const keysOutput = execSync(
+      `redis-cli --no-auth-warning KEYS "${PROMISE_KEY_PREFIX}*" 2>/dev/null`,
+      { encoding: 'utf-8', timeout: 2000 }
+    ).trim();
+
+    if (!keysOutput) return promises;
+
+    const keys = keysOutput.split('\n').filter(k => k.length > 0);
+
+    for (const key of keys) {
+      try {
+        const value = execSync(
+          `redis-cli --no-auth-warning GET "${key}" 2>/dev/null`,
+          { encoding: 'utf-8', timeout: 1000 }
+        ).trim();
+
+        if (value) {
+          const promise = JSON.parse(value) as CoderPromise;
+          promises.set(promise.sessionId, promise);
+        }
+      } catch {
+        // Ignore individual key errors
+      }
+    }
+  } catch {
+    // Redis not available or error - just return empty map
+  }
+
+  return promises;
+}
+
 export async function getTmuxSessions(): Promise<Session[]> {
   try {
     // Get session info including pane title (which may contain task description)
@@ -16,6 +58,9 @@ export async function getTmuxSessions(): Promise<Session[]> {
       'tmux list-sessions -F "#{session_name}|#{session_created}|#{pane_current_path}|#{pane_title}" 2>/dev/null',
       { encoding: 'utf-8' }
     );
+
+    // Get promises from Redis
+    const promises = getPromises();
 
     const sessions: Session[] = output
       .trim()
@@ -40,6 +85,9 @@ export async function getTmuxSessions(): Promise<Session[]> {
           task = paneTitle;
         }
 
+        // Get promise data if available
+        const promise = promises.get(name);
+
         return {
           name,
           tool: ['claude', 'gemini', 'codex', 'opencode'].includes(toolName)
@@ -50,12 +98,18 @@ export async function getTmuxSessions(): Promise<Session[]> {
           createdAt: created ? new Date(parseInt(created) * 1000) : undefined,
           isOrchestrator,
           heartbeatStatus: 'healthy' as const, // TODO: integrate with Redis
+          promise,
+          hasPromise: !!promise,
         };
       })
-      // Sort: orchestrator first, then by creation time (newest first)
+      // Sort: orchestrator first, then active sessions, then completed sessions
       .sort((a, b) => {
         if (a.isOrchestrator) return -1;
         if (b.isOrchestrator) return 1;
+        // Active (no promise) before completed (has promise)
+        if (a.hasPromise && !b.hasPromise) return 1;
+        if (!a.hasPromise && b.hasPromise) return -1;
+        // Within same category, sort by creation time (newest first)
         if (a.createdAt && b.createdAt) {
           return b.createdAt.getTime() - a.createdAt.getTime();
         }
@@ -87,7 +141,57 @@ export function attachSession(sessionName: string): void {
 export function killSession(sessionName: string): void {
   try {
     execSync(`tmux kill-session -t "${sessionName}" 2>/dev/null`);
+    // Also try to clean up the promise from Redis
+    try {
+      execSync(`redis-cli --no-auth-warning DEL "${PROMISE_KEY_PREFIX}${sessionName}" 2>/dev/null`);
+    } catch {
+      // Redis cleanup is best-effort
+    }
   } catch {
     // Session may already be dead
+  }
+}
+
+/**
+ * Kill all sessions that have promises (completed sessions)
+ * Returns the number of sessions killed
+ */
+export async function killCompletedSessions(): Promise<{ killed: string[]; failed: string[] }> {
+  const sessions = await getTmuxSessions();
+  const completedSessions = sessions.filter(s => s.hasPromise && !s.isOrchestrator);
+
+  const killed: string[] = [];
+  const failed: string[] = [];
+
+  for (const session of completedSessions) {
+    try {
+      execSync(`tmux kill-session -t "${session.name}" 2>/dev/null`);
+      // Clean up promise from Redis
+      try {
+        execSync(`redis-cli --no-auth-warning DEL "${PROMISE_KEY_PREFIX}${session.name}" 2>/dev/null`);
+      } catch {
+        // Redis cleanup is best-effort
+      }
+      killed.push(session.name);
+    } catch {
+      failed.push(session.name);
+    }
+  }
+
+  return { killed, failed };
+}
+
+/**
+ * Resume a session by clearing its promise
+ */
+export function resumeSession(sessionName: string): boolean {
+  try {
+    const result = execSync(
+      `redis-cli --no-auth-warning DEL "${PROMISE_KEY_PREFIX}${sessionName}" 2>/dev/null`,
+      { encoding: 'utf-8' }
+    ).trim();
+    return result === '1';
+  } catch {
+    return false;
   }
 }

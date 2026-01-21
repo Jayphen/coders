@@ -8,6 +8,9 @@ export interface Session {
   isOrchestrator: boolean;
   heartbeatStatus?: 'healthy' | 'stale' | 'dead';
   lastActivity?: Date;
+  // Promise (completion) data
+  promise?: CoderPromise;
+  hasPromise?: boolean;
 }
 
 export interface HeartbeatData {
@@ -17,4 +20,13 @@ export interface HeartbeatData {
   status: string;
   lastActivity?: string;
   parentSessionId?: string;
+}
+
+export interface CoderPromise {
+  sessionId: string;
+  timestamp: number;
+  summary: string;
+  status: 'completed' | 'blocked' | 'needs-review';
+  filesChanged?: string[];
+  blockers?: string[];
 }

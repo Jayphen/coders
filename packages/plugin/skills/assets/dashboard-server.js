@@ -21,8 +21,10 @@ const ORCHESTRATOR_SESSION_ID = 'coder-orchestrator';
 const PORT = process.env.DASHBOARD_PORT || 3030;
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const HEARTBEAT_CHANNEL = 'coders:heartbeats';
+const PROMISES_CHANNEL = 'coders:promises';
 const PANE_KEY_PREFIX = 'coders:pane:';
 const SESSION_META_KEY_PREFIX = 'coders:session-meta:';
+const PROMISE_KEY_PREFIX = 'coders:promise:';
 const RESPONSE_SAMPLE_LINES = 20;
 const RESPONSE_SAMPLE_INTERVAL_MS = 5000;
 const RECONNECT_BASE_MS = 500;
@@ -33,6 +35,7 @@ const sessions = new Map();
 const sseClients = new Set();
 const responseStates = new Map();
 const sessionMetadataCache = new Map(); // Cache for displayName and other metadata
+const promisesCache = new Map(); // Cache for session promises (completion summaries)
 let lastResponseSampleAt = 0;
 
 // Clean stale sessions and orphaned heartbeat processes every 30 seconds
@@ -165,6 +168,10 @@ function getFormattedSessionList() {
     const metadata = sessionMetadataCache.get(tmux.sessionId);
     const displayName = metadata?.displayName || null;
 
+    // Get promise (completion) data
+    const promise = promisesCache.get(tmux.sessionId);
+    const hasPromise = !!promise;
+
     return {
       sessionId: tmux.sessionId,
       displayName: displayName,
@@ -178,7 +185,10 @@ function getFormattedSessionList() {
       lastActivity: computedActivity,
       isOrchestrator: isOrchestrator,
       cwd: getSessionCwd(tmux.sessionId),
-      parentSessionId: heartbeat?.parentSessionId || null
+      parentSessionId: heartbeat?.parentSessionId || null,
+      // Promise data
+      promise: promise || null,
+      hasPromise: hasPromise
     };
   });
 
@@ -251,8 +261,10 @@ async function reconnectRedis() {
   try {
     await connectRedis();
     await subscribeToHeartbeats();
+    await subscribeToPromises();
     await loadInitialState();
     await loadSessionMetadata();
+    await loadPromises();
     reconnectAttempts = 0;
   } catch (err) {
     console.error('[Redis] Reconnect failed:', err.message);
@@ -281,6 +293,23 @@ async function subscribeToHeartbeats() {
   console.log('[Redis] Subscribed to heartbeats');
 }
 
+// Subscribe to promises channel
+async function subscribeToPromises() {
+  await redisSubscriber.subscribe(PROMISES_CHANNEL, (message) => {
+    try {
+      const data = JSON.parse(message);
+      promisesCache.set(data.sessionId, data);
+      console.log(`[Promise] Received promise for ${data.sessionId}: ${data.summary}`);
+      // Broadcast update immediately
+      broadcast('sessions', getFormattedSessionList());
+    } catch (e) {
+      console.error('[Promise] Parse error:', e);
+    }
+  });
+
+  console.log('[Redis] Subscribed to promises');
+}
+
 // Load session metadata (displayName, etc.) from Redis
 async function loadSessionMetadata() {
   try {
@@ -300,6 +329,28 @@ async function loadSessionMetadata() {
     console.log(`[Redis] Loaded metadata for ${sessionMetadataCache.size} sessions`);
   } catch (e) {
     console.error('[Metadata Load] Failed to list keys:', e);
+  }
+}
+
+// Load promises (completion summaries) from Redis
+async function loadPromises() {
+  try {
+    const keys = await redisClient.keys(`${PROMISE_KEY_PREFIX}*`);
+    for (const key of keys) {
+      try {
+        const value = await redisClient.get(key);
+        if (value) {
+          const sessionId = key.replace(PROMISE_KEY_PREFIX, '');
+          const data = JSON.parse(value);
+          promisesCache.set(sessionId, data);
+        }
+      } catch (e) {
+        console.error('[Promise Load] Error reading key', key, e);
+      }
+    }
+    console.log(`[Redis] Loaded ${promisesCache.size} promises`);
+  } catch (e) {
+    console.error('[Promise Load] Failed to list keys:', e);
   }
 }
 
@@ -630,6 +681,88 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // API: Bulk kill completed sessions (sessions with promises)
+  if (url.pathname === '/api/kill-completed' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        // Find all sessions with promises (completed sessions)
+        const sessionList = getFormattedSessionList();
+        const completedSessions = sessionList.filter(s => s.hasPromise && !s.isOrchestrator);
+
+        const killed = [];
+        const failed = [];
+
+        for (const session of completedSessions) {
+          const result = killSession(session.sessionId);
+          if (result.success) {
+            // Also clean up the promise from cache and Redis
+            promisesCache.delete(session.sessionId);
+            try {
+              await redisClient.del(`${PROMISE_KEY_PREFIX}${session.sessionId}`);
+            } catch (e) {
+              console.error(`[Bulk Kill] Failed to delete promise for ${session.sessionId}:`, e);
+            }
+            killed.push(session.sessionId);
+          } else {
+            failed.push({ sessionId: session.sessionId, error: result.error });
+          }
+        }
+
+        if (killed.length > 0) {
+          broadcast('sessions', getFormattedSessionList());
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          killed,
+          failed,
+          totalKilled: killed.length,
+          totalFailed: failed.length
+        }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // API: Resume a session (clear its promise)
+  if (url.pathname === '/api/resume' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { session } = JSON.parse(body);
+        if (!isValidSessionId(session)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Invalid session id' }));
+          return;
+        }
+
+        // Remove promise from cache and Redis
+        promisesCache.delete(session);
+        try {
+          await redisClient.del(`${PROMISE_KEY_PREFIX}${session}`);
+        } catch (e) {
+          console.error(`[Resume] Failed to delete promise for ${session}:`, e);
+        }
+
+        broadcast('sessions', getFormattedSessionList());
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, sessionId: session }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
   // API: Server-Sent Events for live updates
   if (url.pathname === '/api/events') {
     res.writeHead(200, {
@@ -666,8 +799,10 @@ const server = http.createServer(async (req, res) => {
 async function start() {
   await connectRedis();
   await subscribeToHeartbeats();
+  await subscribeToPromises();
   await loadInitialState();
   await loadSessionMetadata();
+  await loadPromises();
 
   server.listen(PORT, () => {
     console.log(`\n🎯 Coders Dashboard running at http://localhost:${PORT}`);

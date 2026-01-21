@@ -11,9 +11,11 @@ import * as os from 'os';
 
 const SNAPSHOT_DIR = os.homedir() + '/.coders/snapshots';
 export const HEARTBEAT_CHANNEL = 'coders:heartbeats';
+export const PROMISES_CHANNEL = 'coders:promises';
 export const DEAD_LETTER_KEY = 'coders:dead-letter';
 const PANE_ID_KEY_PREFIX = 'coders:pane:';
 export const SESSION_META_KEY_PREFIX = 'coders:session-meta:';
+export const PROMISE_KEY_PREFIX = 'coders:promise:';
 
 // Types
 export interface RedisConfig {
@@ -56,6 +58,15 @@ export interface SessionMetadata {
   tool: string;
   task: string;
   createdAt: number;
+}
+
+export interface CoderPromise {
+  sessionId: string;
+  timestamp: number;
+  summary: string;
+  status: 'completed' | 'blocked' | 'needs-review';
+  filesChanged?: string[];
+  blockers?: string[];
 }
 
 /**
@@ -524,6 +535,83 @@ export class RedisManager {
 
     return result;
   }
+
+  /**
+   * Publish a promise (completion message) for this session
+   */
+  async publishPromise(promise: Omit<CoderPromise, 'sessionId' | 'timestamp'>): Promise<void> {
+    if (!(await this.ensureConnected())) return;
+
+    const sessionId = this.getSessionId();
+    const fullPromise: CoderPromise = {
+      ...promise,
+      sessionId,
+      timestamp: Date.now()
+    };
+
+    // Store the promise
+    const key = `${PROMISE_KEY_PREFIX}${sessionId}`;
+    await this.client.set(key, JSON.stringify(fullPromise), {
+      EX: 86400 // 24 hour TTL
+    });
+
+    // Publish to promises channel for real-time updates
+    await this.client.publish(PROMISES_CHANNEL, JSON.stringify(fullPromise));
+
+    console.log(`[Redis] Promise published for ${sessionId}: ${promise.summary}`);
+  }
+
+  /**
+   * Get a promise for a specific session
+   */
+  async getPromise(sessionId: string): Promise<CoderPromise | null> {
+    if (!(await this.ensureConnected())) return null;
+
+    const key = `${PROMISE_KEY_PREFIX}${sessionId}`;
+    const data = await this.client.get(key);
+
+    if (!data) return null;
+
+    try {
+      return JSON.parse(data) as CoderPromise;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get all promises
+   */
+  async getAllPromises(): Promise<Map<string, CoderPromise>> {
+    const result = new Map<string, CoderPromise>();
+    if (!(await this.ensureConnected())) return result;
+
+    const keys = await this.client.keys(`${PROMISE_KEY_PREFIX}*`);
+
+    for (const key of keys) {
+      const data = await this.client.get(key);
+      if (data) {
+        try {
+          const sessionId = key.replace(PROMISE_KEY_PREFIX, '');
+          result.set(sessionId, JSON.parse(data));
+        } catch {}
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Delete a promise (used when resuming a session)
+   */
+  async deletePromise(sessionId: string): Promise<void> {
+    if (!(await this.ensureConnected())) return;
+
+    const key = `${PROMISE_KEY_PREFIX}${sessionId}`;
+    await this.client.del(key);
+
+    console.log(`[Redis] Promise deleted for ${sessionId}`);
+  }
 }
 
 /**
@@ -643,6 +731,8 @@ export default {
   injectPaneIdContext,
   SNAPSHOT_DIR,
   HEARTBEAT_CHANNEL,
+  PROMISES_CHANNEL,
   DEAD_LETTER_KEY,
-  SESSION_META_KEY_PREFIX
+  SESSION_META_KEY_PREFIX,
+  PROMISE_KEY_PREFIX
 };
