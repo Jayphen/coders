@@ -18,8 +18,13 @@ Spawn Claude, Gemini, Codex, or OpenCode in an isolated tmux window with optiona
 ## Usage
 
 ```
-/coders:spawn [tool] --task "description" [--cwd path] [--worktree branch] [--prd file.md]
+/coders:spawn <tool> --task "description" [--dir path] [--worktree branch] [--prd file.md]
 ```
+
+**REQUIRED:** You must specify both the tool (e.g., `claude`) AND `--task "description"`. Do NOT just pass a task string directly.
+
+✅ Correct: `/coders:spawn claude --task "Fix the bug"`
+❌ Wrong: `/coders:spawn "Fix the bug"`
 
 ## Options
 
