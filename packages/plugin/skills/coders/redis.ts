@@ -106,6 +106,13 @@ export class RedisManager {
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private deadLetterListener: ChildProcess | null = null;
   private subscribers: Map<string, RedisClientType> = new Map();
+  private subscriptionHandlers: Map<string, (message: any) => void> = new Map();
+  private reconnectAttempts = 0;
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private connectPromise: Promise<void> | null = null;
+  private isShuttingDown = false;
+  private subscriberReconnectTimers: Map<string, NodeJS.Timeout> = new Map();
+  private subscriberReconnectAttempts: Map<string, number> = new Map();
 
   constructor(config: RedisConfig = {}) {
     this.config = {
@@ -123,16 +130,165 @@ export class RedisManager {
   async connect(): Promise<void> {
     if (this.client?.isOpen) return;
 
-    this.client = createClient({
+    if (this.connectPromise) return this.connectPromise;
+
+    this.isShuttingDown = false;
+
+    this.connectPromise = (async () => {
+      if (!this.client) {
+        this.client = this.createRedisClient();
+      }
+
+      try {
+        await this.client.connect();
+      } catch (err) {
+        console.warn('[Redis] Connect failed, recreating client:', (err as Error).message);
+        this.client = this.createRedisClient();
+        await this.client.connect();
+      }
+
+      this.reconnectAttempts = 0;
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+
+      console.log('[Redis] Connected to', this.config.url);
+    })().finally(() => {
+      this.connectPromise = null;
+    });
+
+    return this.connectPromise;
+  }
+
+  private createRedisClient(): RedisClientType {
+    const client = createClient({
       url: this.config.url
     });
 
-    this.client.on('error', (err) => {
+    client.on('error', (err) => {
       console.error('[Redis] Error:', err.message);
     });
 
-    await this.client.connect();
-    console.log('[Redis] Connected to', this.config.url);
+    client.on('end', () => {
+      if (this.isShuttingDown) return;
+      this.scheduleReconnect('end');
+    });
+
+    client.on('ready', () => {
+      this.reconnectAttempts = 0;
+    });
+
+    return client;
+  }
+
+  private getReconnectDelay(attempt: number): number {
+    const base = 500;
+    const max = 30000;
+    const jitter = Math.floor(Math.random() * 250);
+    return Math.min(base * Math.pow(2, attempt), max) + jitter;
+  }
+
+  private scheduleReconnect(reason: string): void {
+    if (this.isShuttingDown || this.reconnectTimer) return;
+    const delay = this.getReconnectDelay(this.reconnectAttempts++);
+    console.warn(`[Redis] Disconnected (${reason}). Reconnecting in ${delay}ms`);
+
+    this.reconnectTimer = setTimeout(async () => {
+      this.reconnectTimer = null;
+      if (this.isShuttingDown) return;
+
+      try {
+        await this.connect();
+        await this.restoreSubscriptions();
+      } catch (err) {
+        console.error('[Redis] Reconnect failed:', (err as Error).message);
+        this.scheduleReconnect('retry');
+      }
+    }, delay);
+  }
+
+  private async ensureConnected(): Promise<boolean> {
+    if (this.client?.isOpen) return true;
+    try {
+      await this.connect();
+      return this.client?.isOpen || false;
+    } catch (err) {
+      this.scheduleReconnect('ensureConnected');
+      return false;
+    }
+  }
+
+  private async ensureSubscriber(channel: string): Promise<void> {
+    if (!(await this.ensureConnected())) return;
+
+    const existing = this.subscribers.get(channel);
+    if (existing?.isOpen) return;
+
+    if (existing) {
+      try {
+        await existing.quit();
+      } catch {}
+      this.subscribers.delete(channel);
+    }
+
+    const callback = this.subscriptionHandlers.get(channel);
+    if (!callback || !this.client) return;
+
+    const subscriber = this.client.duplicate();
+    subscriber.on('error', (err) => {
+      console.error('[Redis Sub] Error:', err.message);
+    });
+    subscriber.on('end', () => {
+      if (this.isShuttingDown) return;
+      this.scheduleSubscriberReconnect(channel);
+    });
+
+    await subscriber.connect();
+    await subscriber.subscribe(`coders:msg:${channel}`, (message) => {
+      try {
+        const data = JSON.parse(message);
+        callback(data);
+      } catch (e) {
+        console.error('[Redis] Failed to parse message:', e);
+      }
+    });
+
+    this.subscribers.set(channel, subscriber);
+  }
+
+  private scheduleSubscriberReconnect(channel: string): void {
+    if (this.isShuttingDown || this.subscriberReconnectTimers.has(channel)) return;
+
+    const attempt = this.subscriberReconnectAttempts.get(channel) || 0;
+    const delay = this.getReconnectDelay(attempt);
+    this.subscriberReconnectAttempts.set(channel, attempt + 1);
+
+    const timer = setTimeout(async () => {
+      this.subscriberReconnectTimers.delete(channel);
+      if (this.isShuttingDown) return;
+
+      try {
+        await this.ensureSubscriber(channel);
+        this.subscriberReconnectAttempts.delete(channel);
+      } catch (err) {
+        console.error(`[Redis Sub] Reconnect failed for ${channel}:`, (err as Error).message);
+        this.scheduleSubscriberReconnect(channel);
+      }
+    }, delay);
+
+    this.subscriberReconnectTimers.set(channel, timer);
+  }
+
+  private async restoreSubscriptions(): Promise<void> {
+    const channels = Array.from(this.subscriptionHandlers.keys());
+    for (const channel of channels) {
+      try {
+        await this.ensureSubscriber(channel);
+      } catch (err) {
+        console.error(`[Redis Sub] Failed to restore ${channel}:`, (err as Error).message);
+      }
+    }
   }
 
   /**
@@ -140,6 +296,16 @@ export class RedisManager {
    */
   async disconnect(): Promise<void> {
     this.stopHeartbeat();
+    this.isShuttingDown = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    for (const timer of this.subscriberReconnectTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.subscriberReconnectTimers.clear();
+    this.subscriberReconnectAttempts.clear();
     // Clean up all subscribers
     for (const [channel, sub] of this.subscribers.entries()) {
       try {
@@ -178,7 +344,7 @@ export class RedisManager {
    * Publish heartbeat for this pane
    */
   async publishHeartbeat(status: HeartbeatData['status'] = 'alive', lastActivity: string = 'working'): Promise<void> {
-    if (!this.client?.isOpen) return;
+    if (!(await this.ensureConnected())) return;
 
     const data: HeartbeatData = {
       paneId: this.paneId,
@@ -240,7 +406,7 @@ export class RedisManager {
    * Publish to inter-agent communication channel
    */
   async publishMessage(channel: string, message: any): Promise<void> {
-    if (!this.client?.isOpen) await this.connect();
+    if (!(await this.ensureConnected())) return;
     
     const topic = `coders:msg:${channel}`;
     await this.client.publish(topic, JSON.stringify({
@@ -254,22 +420,8 @@ export class RedisManager {
    * Subscribe to inter-agent communication channel
    */
   async subscribeToChannel(channel: string, callback: (message: any) => void): Promise<void> {
-    if (!this.client?.isOpen) await this.connect();
-
-    const topic = `coders:msg:${channel}`;
-    const subscriber = this.client.duplicate();
-    await subscriber.connect();
-
-    await subscriber.subscribe(topic, (message) => {
-      try {
-        const data = JSON.parse(message);
-        callback(data);
-      } catch (e) {
-        console.error('[Redis] Failed to parse message:', e);
-      }
-    });
-
-    this.subscribers.set(channel, subscriber);
+    this.subscriptionHandlers.set(channel, callback);
+    await this.ensureSubscriber(channel);
   }
 
   /**
@@ -283,13 +435,18 @@ export class RedisManager {
       if (subscriber.isOpen) await subscriber.quit();
       this.subscribers.delete(channel);
     }
+    this.subscriptionHandlers.delete(channel);
+    const timer = this.subscriberReconnectTimers.get(channel);
+    if (timer) clearTimeout(timer);
+    this.subscriberReconnectTimers.delete(channel);
+    this.subscriberReconnectAttempts.delete(channel);
   }
 
   /**
    * Get all active panes from Redis
    */
   async getActivePanes(): Promise<PaneInfo[]> {
-    if (!this.client?.isOpen) return [];
+    if (!(await this.ensureConnected())) return [];
     
     const keys = await this.client.keys(`${PANE_ID_KEY_PREFIX}*`);
     const panes: PaneInfo[] = [];
@@ -310,7 +467,7 @@ export class RedisManager {
    * Mark pane as dead (called by dead-letter listener)
    */
   async markPaneDead(paneId: string): Promise<void> {
-    if (!this.client?.isOpen) return;
+    if (!(await this.ensureConnected())) return;
 
     await this.client.rPush(DEAD_LETTER_KEY, paneId);
     console.log(`[Redis] Marked pane ${paneId} as dead`);
@@ -320,7 +477,7 @@ export class RedisManager {
    * Store session metadata (including displayName)
    */
   async setSessionMetadata(sessionId: string, metadata: SessionMetadata): Promise<void> {
-    if (!this.client?.isOpen) return;
+    if (!(await this.ensureConnected())) return;
 
     const key = `${SESSION_META_KEY_PREFIX}${sessionId}`;
     await this.client.set(key, JSON.stringify(metadata), {
@@ -332,7 +489,7 @@ export class RedisManager {
    * Get session metadata
    */
   async getSessionMetadata(sessionId: string): Promise<SessionMetadata | null> {
-    if (!this.client?.isOpen) return null;
+    if (!(await this.ensureConnected())) return null;
 
     const key = `${SESSION_META_KEY_PREFIX}${sessionId}`;
     const data = await this.client.get(key);
@@ -351,7 +508,7 @@ export class RedisManager {
    */
   async getAllSessionMetadata(): Promise<Map<string, SessionMetadata>> {
     const result = new Map<string, SessionMetadata>();
-    if (!this.client?.isOpen) return result;
+    if (!(await this.ensureConnected())) return result;
 
     const keys = await this.client.keys(`${SESSION_META_KEY_PREFIX}*`);
 
@@ -392,6 +549,7 @@ export class DeadLetterListener {
 
     const checkInterval = setInterval(async () => {
       try {
+        await this.redisManager.connect();
         const client = this.redisManager.getClient();
         const deadPane = await client?.blPop(DEAD_LETTER_KEY, 0);
         

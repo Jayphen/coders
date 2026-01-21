@@ -25,6 +25,8 @@ const PANE_KEY_PREFIX = 'coders:pane:';
 const SESSION_META_KEY_PREFIX = 'coders:session-meta:';
 const RESPONSE_SAMPLE_LINES = 20;
 const RESPONSE_SAMPLE_INTERVAL_MS = 5000;
+const RECONNECT_BASE_MS = 500;
+const RECONNECT_MAX_MS = 30000;
 
 // Store active sessions and SSE clients
 const sessions = new Map();
@@ -69,6 +71,42 @@ setInterval(() => {
 // Redis clients
 let redisClient;
 let redisSubscriber;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
+let reconnectInFlight = false;
+let isShuttingDown = false;
+
+function getReconnectDelay(attempt) {
+  const jitter = Math.floor(Math.random() * 250);
+  return Math.min(RECONNECT_BASE_MS * Math.pow(2, attempt), RECONNECT_MAX_MS) + jitter;
+}
+
+function scheduleReconnect(reason) {
+  if (isShuttingDown || reconnectTimer) return;
+  const delay = getReconnectDelay(reconnectAttempts++);
+  console.warn(`[Redis] Disconnected (${reason}). Reconnecting in ${delay}ms`);
+  reconnectTimer = setTimeout(async () => {
+    reconnectTimer = null;
+    if (isShuttingDown) return;
+    await reconnectRedis();
+  }, delay);
+}
+
+async function cleanupRedisClients() {
+  try {
+    if (redisSubscriber?.isOpen) {
+      await redisSubscriber.unsubscribe();
+      await redisSubscriber.quit();
+    }
+  } catch {}
+  try {
+    if (redisClient?.isOpen) {
+      await redisClient.quit();
+    }
+  } catch {}
+  redisSubscriber = null;
+  redisClient = null;
+}
 
 // Broadcast to all connected SSE clients
 function broadcast(type, data) {
@@ -176,6 +214,7 @@ function getFormattedSessionList() {
 // Connect to Redis (with dynamic import)
 async function connectRedis() {
   try {
+    await cleanupRedisClients();
     // Use dynamic import to avoid top-level import errors
     const { createClient } = await import('redis');
 
@@ -184,6 +223,17 @@ async function connectRedis() {
 
     redisClient.on('error', (err) => console.error('[Redis] Error:', err));
     redisSubscriber.on('error', (err) => console.error('[Redis Sub] Error:', err));
+    redisClient.on('end', () => {
+      if (isShuttingDown) return;
+      scheduleReconnect('client-end');
+    });
+    redisSubscriber.on('end', () => {
+      if (isShuttingDown) return;
+      scheduleReconnect('subscriber-end');
+    });
+    redisClient.on('ready', () => {
+      reconnectAttempts = 0;
+    });
 
     await redisClient.connect();
     await redisSubscriber.connect();
@@ -192,6 +242,23 @@ async function connectRedis() {
   } catch (err) {
     console.error('[Redis] Failed to load redis module:', err.message);
     throw err;
+  }
+}
+
+async function reconnectRedis() {
+  if (reconnectInFlight || isShuttingDown) return;
+  reconnectInFlight = true;
+  try {
+    await connectRedis();
+    await subscribeToHeartbeats();
+    await loadInitialState();
+    await loadSessionMetadata();
+    reconnectAttempts = 0;
+  } catch (err) {
+    console.error('[Redis] Reconnect failed:', err.message);
+    scheduleReconnect('retry');
+  } finally {
+    reconnectInFlight = false;
   }
 }
 
@@ -611,6 +678,8 @@ async function start() {
 // Handle shutdown gracefully
 async function shutdown() {
   console.log('\n[Dashboard] Shutting down...');
+  isShuttingDown = true;
+  if (reconnectTimer) clearTimeout(reconnectTimer);
 
   // Close all SSE connections
   for (const client of sseClients) {
@@ -620,13 +689,7 @@ async function shutdown() {
 
   // Disconnect Redis clients
   try {
-    if (redisSubscriber?.isOpen) {
-      await redisSubscriber.unsubscribe();
-      await redisSubscriber.quit();
-    }
-    if (redisClient?.isOpen) {
-      await redisClient.quit();
-    }
+    await cleanupRedisClients();
     console.log('[Dashboard] Redis connections closed');
   } catch (e) {
     console.error('[Dashboard] Error closing Redis:', e.message);

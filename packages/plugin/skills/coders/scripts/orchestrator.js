@@ -16,9 +16,22 @@ async function getRedisClient() {
       const { createClient } = await import('redis');
       redisClient = createClient({ url: REDIS_URL });
       redisClient.on('error', (err) => console.error('[Redis] Error:', err));
+      redisClient.on('end', () => {
+        console.warn('[Redis] Connection closed, will reconnect on next use.');
+        redisClient = null;
+      });
       await redisClient.connect();
     } catch (err) {
       throw new Error(`Failed to load redis: ${err.message}`);
+    }
+  }
+  if (redisClient && !redisClient.isOpen) {
+    try {
+      await redisClient.connect();
+    } catch (err) {
+      console.warn('[Redis] Reconnect failed, recreating client.');
+      redisClient = null;
+      return getRedisClient();
     }
   }
   return redisClient;

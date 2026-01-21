@@ -1,0 +1,56 @@
+# Coders Plugin - Task List
+# Derived from PRD roadmap and improvements
+
+## Phase 1: Reliability & Polish
+[x] Implement auto-reconnect logic for Redis disconnections
+[ ] Add health checks for proactive detection of stuck sessions
+[ ] Implement automatic session restart on crash (error recovery)
+[ ] Add structured logging for better debugging
+[ ] Create configuration file support (YAML/JSON) for default settings
+[ ] Implement graceful degradation when Redis is unavailable (local fallback)
+[ ] Document minimum tmux version requirements
+
+## Phase 2: Enhanced Coordination
+[ ] Implement task dependencies to define prerequisites between agents
+[ ] Build shared context system for agents to share discovered information
+[ ] Create result aggregation to collect and merge outputs from multiple agents
+[ ] Implement event-driven workflows to trigger actions based on session events
+[ ] Build agent-to-agent handoff for delegating subtasks
+
+## Phase 3: Developer Experience
+[ ] Develop VS Code extension for native IDE integration
+[ ] Create session templates for pre-defined multi-agent configurations
+[ ] Implement cost tracking to monitor API usage across agents
+[ ] Add output archiving to save session transcripts for review
+[ ] Build replay mode to re-run sessions from saved state
+
+## Phase 4: Scale & Distribution
+[ ] Implement remote sessions via SSH-based agent spawning
+[ ] Add container isolation using Docker for session sandboxing
+[ ] Create Kubernetes operator for cloud-native multi-agent orchestration
+[ ] Build team sharing for session state across team members
+[ ] Implement queue-based spawning with rate-limited agent creation
+
+## Phase 5: Intelligence
+[ ] Implement smart routing to automatically select best AI for task type
+[ ] Build context optimization to compress and prioritize context for agents
+[ ] Add learning from history to suggest similar past solutions
+[ ] Implement conflict detection to warn when agents might conflict
+[ ] Create progress estimation based on patterns
+
+## Risk Mitigations
+[ ] Implement version pinning and adapter pattern for AI CLI breaking changes
+[ ] Add automatic cleanup with TTLs to prevent session resource leaks
+[ ] Implement sandboxing and permission controls for security
+
+## Current Limitations to Address
+[ ] Add cross-platform support beyond macOS (iTerm2 integration)
+[ ] Implement distributed multi-machine coordination
+[ ] Add automatic session restore after reboot
+[ ] Create adapters for tool-specific quirks (TUI vs stdin handling)
+
+## Performance Targets
+[ ] Optimize session spawn time to under 2 seconds
+[ ] Ensure dashboard update latency under 100ms
+[ ] Achieve heartbeat reliability above 99.9%
+[ ] Improve session restore success rate above 95%
