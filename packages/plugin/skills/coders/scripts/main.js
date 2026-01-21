@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { execSync, spawn } from 'child_process';
+import { execSync, spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -477,6 +477,7 @@ ${colors.blue}🤖 Coder Spawner - Spawn AI coding assistants in NEW tmux window
 ${colors.green}Usage:${colors.reset}
   coders spawn <tool> [options]
   coders orchestrator
+  coders tui
   coders list
   coders attach <session>
   coders kill <session>
@@ -494,6 +495,10 @@ ${colors.green}Tools:${colors.reset}
 ${colors.green}Orchestrator:${colors.reset}
   coders orchestrator    - Start/attach to the orchestrator session
                           (persistent session for coordinating other coders)
+
+${colors.green}TUI:${colors.reset}
+  coders tui             - Open the terminal UI for managing sessions
+                          (spawns in its own tmux session: coders-tui)
 
 ${colors.green}Plugin Update:${colors.reset}
   coders update-plugin   - Broadcast '/plugin update' to all active sessions
@@ -696,6 +701,46 @@ async function restartDashboard() {
   }
 }
 
+function launchTui() {
+  // Get the path to the TUI package (sibling package in monorepo)
+  const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+  const tuiPath = path.resolve(scriptDir, '../../../../tui/dist/cli.js');
+  const tuiDevPath = path.resolve(scriptDir, '../../../../tui/src/cli.tsx');
+
+  // Check if built version exists, otherwise fall back to dev mode
+  let tuiScript = tuiPath;
+  let runner = 'node';
+
+  if (!fs.existsSync(tuiPath)) {
+    if (fs.existsSync(tuiDevPath)) {
+      tuiScript = tuiDevPath;
+      runner = 'tsx';
+      log(`📦 Using development mode (tsx)`, 'yellow');
+    } else {
+      log(`❌ TUI not found. Please build the TUI package first:`, 'red');
+      log(`   cd packages/tui && pnpm build`, 'yellow');
+      return;
+    }
+  }
+
+  log(`🖥️  Launching TUI...`, 'blue');
+
+  try {
+    // The TUI handles its own tmux session creation (coders-tui)
+    // Just spawn it and let it take over
+    const result = spawnSync(runner, [tuiScript], {
+      stdio: 'inherit',
+      env: process.env
+    });
+
+    if (result.error) {
+      throw result.error;
+    }
+  } catch (e) {
+    log(`❌ Failed to launch TUI: ${e.message}`, 'red');
+  }
+}
+
 // Main
 const args = process.argv.slice(2);
 const command = args[0];
@@ -706,6 +751,8 @@ if (command === 'help' || !command) {
   startOrAttachOrchestrator().catch((err) => {
     log(`❌ Failed to start orchestrator: ${err.message}`, 'red');
   });
+} else if (command === 'tui') {
+  launchTui();
 } else if (command === 'list') {
   listSessions();
 } else if (command === 'attach') {
