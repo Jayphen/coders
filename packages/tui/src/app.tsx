@@ -5,7 +5,7 @@ import { SessionDetail } from './components/SessionDetail.js';
 import { StatusBar } from './components/StatusBar.js';
 import { Header } from './components/Header.js';
 import type { Session } from './types.js';
-import { getTmuxSessions, attachSession, killSession, killCompletedSessions, resumeSession, getGlobalUsage } from './tmux.js';
+import { getTmuxSessions, attachSession, killSession, killCompletedSessions, resumeSession } from './tmux.js';
 
 export function App() {
   const { exit } = useApp();
@@ -15,22 +15,14 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [confirmKillCompleted, setConfirmKillCompleted] = useState(false);
-  const [globalUsage, setGlobalUsage] = useState<{ weeklyLimitPercent?: number; weeklySonnetPercent?: number } | null>(null);
   const sessionsRef = useRef<Session[]>([]);
 
   const refreshSessions = useCallback(async (showLoading = false) => {
     try {
       if (showLoading) setInitialLoading(true);
-      
-      // Parallel fetch
-      const [tmuxSessions, usageData] = await Promise.all([
-        getTmuxSessions(),
-        Promise.resolve(getGlobalUsage()) // getGlobalUsage is sync, but wrap to match flow
-      ]);
-      
+      const tmuxSessions = await getTmuxSessions();
       sessionsRef.current = tmuxSessions;
       setSessions(tmuxSessions);
-      setGlobalUsage(usageData);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to get sessions');
@@ -179,11 +171,7 @@ export function App() {
         </>
       )}
 
-      <StatusBar 
-        sessionCount={sessions.length} 
-        completedCount={completedCount}
-        globalUsage={globalUsage} 
-      />
+      <StatusBar sessionCount={sessions.length} completedCount={completedCount} />
     </Box>
   );
 }

@@ -854,60 +854,6 @@ function runTui(runner, script) {
   }
 }
 
-async function startUsageMonitor() {
-  const sessionName = 'usage-monitor'; // Resulting session ID: coder-usage-monitor
-  const sessionId = `${TMUX_SESSION_PREFIX}${sessionName}`;
-  const scriptDir = path.dirname(new URL(import.meta.url).pathname);
-  const monitorScript = path.join(scriptDir, 'monitor-usage.js');
-  
-  // Check if already running
-  const activeSessions = getActiveCoderSessions();
-  if (activeSessions.includes(sessionId)) {
-    log(`Usage monitor already running: ${sessionId}`, 'blue');
-    return;
-  }
-
-  log(`Starting usage monitor session: ${sessionId}`, 'blue');
-
-  // Create prompt file for monitor
-  const prompt = `
-You are the Usage Monitor.
-Your only job is to stay alive so the system can run '/usage' commands against you.
-Do not exit.
-`;
-  const promptFile = `/tmp/coders-monitor-prompt-${Date.now()}.txt`;
-  fs.writeFileSync(promptFile, prompt);
-
-  // Spawn hidden tmux session with Claude
-  // We run the monitor script in the background of the *host* (not inside tmux), 
-  // or we can run it inside tmux alongside claude? 
-  // Easier: Run claude in tmux, and run the monitor script as a detached node process on the host 
-  // that sends keys to that tmux session.
-  
-  const cmd = `claude --dangerously-skip-permissions < "${promptFile}"`;
-  const fullCmd = `tmux new-session -s "${sessionId}" -d "cd ${process.cwd()}; ${cmd}"`;
-
-  try {
-    execSync(fullCmd);
-    log(`✅ Created monitor session: ${sessionId}`, 'green');
-    
-    // Wait for it to settle
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    
-    // Start the monitor control script in background
-    if (checkRedisDependency()) {
-      const logPath = path.join(os.tmpdir(), 'coders-monitor.log');
-      execSync(`nohup node ${monitorScript} "${sessionId}" > ${logPath} 2>&1 &`);
-      log(`✅ Started monitor control script (logs: ${logPath})`, 'green');
-    } else {
-      log(`⚠️  Redis not found, cannot start usage reporting.`, 'yellow');
-    }
-    
-  } catch (e) {
-    log(`❌ Failed to start usage monitor: ${e.message}`, 'red');
-  }
-}
-
 // Main
 const args = process.argv.slice(2);
 const command = args[0];
@@ -917,10 +863,6 @@ if (command === 'help' || !command) {
 } else if (command === 'orchestrator') {
   startOrAttachOrchestrator().catch((err) => {
     log(`❌ Failed to start orchestrator: ${err.message}`, 'red');
-  });
-} else if (command === 'monitor-usage') {
-  startUsageMonitor().catch((err) => {
-    log(`❌ Failed to start monitor: ${err.message}`, 'red');
   });
 } else if (command === 'tui') {
   launchTui();

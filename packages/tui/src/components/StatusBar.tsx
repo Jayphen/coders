@@ -3,10 +3,9 @@ import { Box, Text } from 'ink';
 interface Props {
   sessionCount: number;
   completedCount?: number;
-  globalUsage?: { weeklyLimitPercent?: number; weeklySonnetPercent?: number } | null;
 }
 
-export function StatusBar({ sessionCount, completedCount = 0, globalUsage }: Props) {
+export function StatusBar({ sessionCount, completedCount = 0 }: Props) {
   const activeCount = sessionCount - completedCount;
 
   return (
@@ -27,14 +26,6 @@ export function StatusBar({ sessionCount, completedCount = 0, globalUsage }: Pro
             {activeCount} active
             {completedCount > 0 && (
               <Text color="gray">, {completedCount} completed</Text>
-            )}
-            {globalUsage?.weeklyLimitPercent !== undefined && (
-              <Text>
-                {' | '}
-                Usage: <Text color={globalUsage.weeklyLimitPercent > 90 ? 'red' : 'green'}>
-                  {globalUsage.weeklyLimitPercent}% (week)
-                </Text>
-              </Text>
             )}
           </Text>
         </Box>
