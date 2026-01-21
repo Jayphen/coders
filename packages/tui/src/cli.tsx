@@ -24,13 +24,6 @@ function tuiSessionExists(): boolean {
 }
 
 function launchInTmuxSession(): void {
-  // Get the path to this script
-  const scriptPath = process.argv[1];
-
-  // Determine how to run the script (tsx for .tsx files, node for .js)
-  const isTsx = scriptPath.endsWith('.tsx') || scriptPath.endsWith('.ts');
-  const runner = isTsx ? 'tsx' : 'node';
-
   if (tuiSessionExists()) {
     if (hasTTY()) {
       // Session exists and we have a TTY, attach to it
@@ -44,13 +37,26 @@ function launchInTmuxSession(): void {
     }
   } else {
     if (hasTTY()) {
+      // Get the path to this script
+      const scriptPath = process.argv[1];
+      const isTsx = scriptPath.endsWith('.tsx') || scriptPath.endsWith('.ts');
+      const runner = isTsx ? 'tsx' : 'node';
+
       // Create new session running the TUI and attach
       spawnSync('tmux', ['new-session', '-s', TUI_SESSION, '-n', 'tui', runner, scriptPath], {
         stdio: 'inherit',
       });
     } else {
-      // No TTY - create detached session
-      spawnSync('tmux', ['new-session', '-d', '-s', TUI_SESSION, '-n', 'tui', runner, scriptPath], {
+      // No TTY - create detached session with a shell that waits for TTY
+      // The TUI will start when the user attaches
+      const scriptPath = process.argv[1];
+      const isTsx = scriptPath.endsWith('.tsx') || scriptPath.endsWith('.ts');
+      const runner = isTsx ? 'tsx' : 'node';
+
+      // Wait for a client to attach to the tmux session before starting the TUI
+      const cmd = `while [ $(tmux list-clients -t ${TUI_SESSION} 2>/dev/null | wc -l) -eq 0 ]; do sleep 0.1; done; ${runner} ${scriptPath}`;
+
+      spawnSync('tmux', ['new-session', '-d', '-s', TUI_SESSION, '-n', 'tui', 'sh', '-c', cmd], {
         stdio: 'inherit',
       });
       console.log(`\x1b[32m✓ TUI session started\x1b[0m`);
@@ -59,12 +65,12 @@ function launchInTmuxSession(): void {
   }
 }
 
-// If we're outside tmux, launch the TUI inside its own tmux session
+// If we're outside tmux OR don't have a TTY, launch the TUI in its own tmux session
 // This allows us to use switch-client when selecting sessions,
 // and the user can return with Ctrl-b L (last session)
-if (!isInsideTmux()) {
+if (!isInsideTmux() || !hasTTY()) {
   launchInTmuxSession();
 } else {
-  // We're inside tmux (either the TUI session or another) - render the app
+  // We're inside tmux with a proper TTY - render the app
   render(<App />);
 }
