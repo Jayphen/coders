@@ -107,7 +107,7 @@ function createWorktree(branchName, baseBranch = 'main') {
   
   try {
     fs.mkdirSync(path.dirname(worktreePath), { recursive: true });
-    execSync(`git worktree add ${worktreePath} ${baseBranch}`, { cwd: gitRoot });
+    execSync(`git worktree add -b ${branchName} ${worktreePath} ${baseBranch}`, { cwd: gitRoot });
     log(`✅ Worktree created: ${worktreePath}`, 'green');
     return worktreePath;
   } catch (e) {
@@ -186,6 +186,9 @@ function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHea
   // Determine the effective working directory: customCwd > worktreePath > process.cwd()
   const effectiveCwd = customCwd || worktreePath || process.cwd();
 
+  // Get the user's shell from the environment (e.g., fish, zsh, bash)
+  const userShell = process.env.SHELL || '/bin/bash';
+
   const cmd = buildSpawnCommand(tool, promptFile, prompt, {
     WORKSPACE_DIR: effectiveCwd,
     CODERS_SESSION_ID: sessionId,
@@ -201,7 +204,8 @@ function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHea
 
   // Create new session (this opens a WINDOW)
   // Use shell command that keeps session alive after codex exits
-  const fullCmd = `tmux new-session -s "${sessionId}" -d "cd ${effectiveCwd}; ${cmd}; exec $SHELL"`;
+  // Use the user's shell explicitly instead of relying on $SHELL expansion
+  const fullCmd = `tmux new-session -s "${sessionId}" -d "cd ${effectiveCwd}; ${cmd}; exec ${userShell}"`;
 
   try {
     execSync(fullCmd);
@@ -313,6 +317,69 @@ function killSession(sessionName) {
   }
 }
 
+/**
+ * Get list of active coder sessions (tmux sessions with the coder- prefix)
+ * @returns {string[]} Array of session names (without the coder- prefix)
+ */
+function getActiveCoderSessions() {
+  try {
+    const output = execSync('tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""', { encoding: 'utf8' });
+    return output
+      .split('\n')
+      .filter(s => s.startsWith(TMUX_SESSION_PREFIX))
+      .map(s => s.trim());
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Send a plugin update command to all active coder sessions
+ * @param {string} pluginName - Name of the plugin to update (default: 'coders')
+ */
+function updatePluginInSessions(pluginName = 'coders') {
+  const sessions = getActiveCoderSessions();
+
+  if (sessions.length === 0) {
+    log('No active coder sessions found.', 'yellow');
+    return;
+  }
+
+  log(`\n📦 Broadcasting plugin update to ${sessions.length} session(s)...\n`, 'blue');
+
+  const updated = [];
+  const failed = [];
+
+  for (const sessionId of sessions) {
+    try {
+      // Send the /plugin update command followed by Enter key
+      const command = `/plugin update ${pluginName}`;
+      execSync(`tmux send-keys -t "${sessionId}" '${command}' Enter`, { encoding: 'utf8' });
+      updated.push(sessionId);
+      log(`  ✅ ${sessionId}`, 'green');
+    } catch (e) {
+      failed.push({ sessionId, error: e.message });
+      log(`  ❌ ${sessionId}: ${e.message}`, 'red');
+    }
+  }
+
+  log('', 'reset');
+
+  if (updated.length > 0) {
+    log(`✅ Successfully sent update command to ${updated.length} session(s)`, 'green');
+  }
+
+  if (failed.length > 0) {
+    log(`⚠️  Failed to update ${failed.length} session(s)`, 'yellow');
+  }
+
+  // Show short session names for convenience
+  if (updated.length > 0) {
+    const shortNames = updated.map(s => s.replace(TMUX_SESSION_PREFIX, ''));
+    log(`\n📋 Updated sessions: ${shortNames.join(', ')}`, 'blue');
+  }
+}
+
 async function startOrAttachOrchestrator() {
   const sessionId = getOrchestratorSessionId();
 
@@ -361,8 +428,10 @@ other coder sessions. Start by spawning your first session or listing existing o
   fs.writeFileSync(promptFile, orchestratorPrompt);
 
   // Spawn orchestrator with Claude Code
+  // Get the user's shell from the environment (e.g., fish, zsh, bash)
+  const userShell = process.env.SHELL || '/bin/bash';
   const cmd = `claude --dangerously-skip-permissions < "${promptFile}"`;
-  const fullCmd = `tmux new-session -s "${sessionId}" -d "cd ${process.cwd()}; ${cmd}; exec $SHELL"`;
+  const fullCmd = `tmux new-session -s "${sessionId}" -d "cd ${process.cwd()}; ${cmd}; exec ${userShell}"`;
 
   try {
     execSync(fullCmd);
@@ -412,6 +481,8 @@ ${colors.green}Usage:${colors.reset}
   coders attach <session>
   coders kill <session>
   coders dashboard
+  coders restart-dashboard
+  coders update-plugin [--plugin <name>]
   coders help
 
 ${colors.green}Tools:${colors.reset}
@@ -423,6 +494,10 @@ ${colors.green}Tools:${colors.reset}
 ${colors.green}Orchestrator:${colors.reset}
   coders orchestrator    - Start/attach to the orchestrator session
                           (persistent session for coordinating other coders)
+
+${colors.green}Plugin Update:${colors.reset}
+  coders update-plugin   - Broadcast '/plugin update' to all active sessions
+    --plugin <name>      Plugin name to update (default: coders)
 
 ${colors.green}Options:${colors.reset}
   --name <name>          Session name (auto-generated if omitted)
@@ -444,6 +519,9 @@ ${colors.green}Examples:${colors.reset}
   coders attach feature-auth
   coders kill feature-auth
   coders dashboard
+  coders restart-dashboard
+  coders update-plugin
+  coders update-plugin --plugin beads
 
 ${colors.green}How it works:${colors.reset}
   1. Creates NEW tmux window (visible!)
@@ -569,6 +647,55 @@ async function launchDashboard() {
   openDashboard(url);
 }
 
+function killDashboardServer() {
+  try {
+    // Find and kill the dashboard server process
+    const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+    const dashboardScript = path.join(scriptDir, '../../assets/dashboard-server.js');
+
+    // Kill by script name pattern
+    execSync(`pkill -f "node.*dashboard-server.js" 2>/dev/null || true`, { encoding: 'utf8' });
+    log(`✅ Stopped existing dashboard server`, 'green');
+    return true;
+  } catch (e) {
+    // pkill returns non-zero if no processes matched, which is fine
+    return true;
+  }
+}
+
+async function restartDashboard() {
+  log(`🔄 Restarting dashboard server...`, 'blue');
+
+  // Kill existing dashboard
+  killDashboardServer();
+
+  // Wait a moment for the port to be released
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  // Ensure dependencies are installed before starting dashboard
+  const depsOk = await ensureDependencies();
+  if (!depsOk) {
+    log(`❌ Cannot start dashboard without dependencies.`, 'red');
+    return;
+  }
+
+  const port = process.env.DASHBOARD_PORT || '3030';
+  const url = `http://localhost:${port}`;
+
+  // Start fresh dashboard
+  const logPath = startDashboardServer(port);
+  const started = await waitForDashboard(port);
+
+  if (started) {
+    log(`✅ Dashboard server restarted on ${url}`, 'green');
+    log(`📝 Logs: ${logPath}`, 'yellow');
+    openDashboard(url);
+  } else {
+    log(`⚠️  Dashboard server may not have started yet.`, 'yellow');
+    log(`📝 Check logs: ${logPath}`, 'yellow');
+  }
+}
+
 // Main
 const args = process.argv.slice(2);
 const command = args[0];
@@ -599,6 +726,20 @@ if (command === 'help' || !command) {
   launchDashboard().catch((err) => {
     log(`❌ Failed to launch dashboard: ${err.message}`, 'red');
   });
+} else if (command === 'restart-dashboard') {
+  restartDashboard().catch((err) => {
+    log(`❌ Failed to restart dashboard: ${err.message}`, 'red');
+  });
+} else if (command === 'update-plugin') {
+  // Parse --plugin flag, default to 'coders'
+  let pluginName = 'coders';
+  for (let i = 1; i < args.length; i++) {
+    if (args[i] === '--plugin' && args[i + 1]) {
+      pluginName = args[i + 1];
+      i++;
+    }
+  }
+  updatePluginInSessions(pluginName);
 } else if (command === 'spawn') {
   // Default to 'claude' if no tool specified or if tool looks like a flag
   let tool = args[1];
