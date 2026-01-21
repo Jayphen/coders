@@ -145,6 +145,54 @@ function generateInitialPrompt(tool, taskDescription, contextFiles = []) {
   return prompt;
 }
 
+/**
+ * CLI banner patterns to detect when each tool is ready
+ */
+const CLI_READY_PATTERNS = {
+  'claude': /Claude Code|claude-code|╭|Tips for getting started/i,
+  'claude-code': /Claude Code|claude-code|╭|Tips for getting started/i,
+  'gemini': /Gemini|gemini-cli|Welcome to Gemini/i,
+  'codex': /Codex|codex-cli|OpenAI/i,
+  'opencode': /OpenCode|opencode|Welcome/i
+};
+
+/**
+ * Wait for the CLI to be ready by polling the tmux pane for the banner
+ * @param {string} sessionId - The tmux session ID
+ * @param {string} tool - The CLI tool name
+ * @param {number} timeoutMs - Timeout in milliseconds (default: 30000)
+ * @param {number} pollIntervalMs - Polling interval in milliseconds (default: 500)
+ * @returns {Promise<boolean>} - True if CLI is ready, false if timeout
+ */
+async function waitForCliReady(sessionId, tool, timeoutMs = 30000, pollIntervalMs = 500) {
+  const pattern = CLI_READY_PATTERNS[tool] || CLI_READY_PATTERNS['claude'];
+  const startTime = Date.now();
+
+  log(`⏳ Waiting for ${tool} CLI to start...`, 'blue');
+
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      // Capture the tmux pane content
+      const paneContent = execSync(`tmux capture-pane -t "${sessionId}" -p 2>/dev/null`, {
+        encoding: 'utf8',
+        timeout: 5000
+      });
+
+      // Check if the CLI banner is present
+      if (pattern.test(paneContent)) {
+        return true;
+      }
+    } catch {
+      // Session might not be ready yet, continue polling
+    }
+
+    // Wait before next poll
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+  }
+
+  return false;
+}
+
 function buildSpawnCommand(tool, promptFile, prompt, extraEnv = {}) {
   let cmd;
   // Escape single quotes in prompt for shell safety
@@ -175,7 +223,7 @@ function buildSpawnCommand(tool, promptFile, prompt, extraEnv = {}) {
   return cmd;
 }
 
-function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat = false, parentSessionId = null, customCwd = null) {
+async function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat = false, parentSessionId = null, customCwd = null) {
   const sessionId = `${TMUX_SESSION_PREFIX}${sessionName}`;
   const promptFile = `/tmp/coders-prompt-${Date.now()}.txt`;
   fs.writeFileSync(promptFile, prompt);
@@ -209,7 +257,15 @@ function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHea
 
   try {
     execSync(fullCmd);
-    log(`✅ Created tmux window: ${sessionId}`, 'green');
+    log(`✅ Created tmux session: ${sessionId}`, 'green');
+
+    // Wait for the CLI to be ready before returning
+    const cliReady = await waitForCliReady(sessionId, tool);
+    if (cliReady) {
+      log(`✅ ${tool} CLI is ready`, 'green');
+    } else {
+      log(`⚠️  Timeout waiting for ${tool} CLI (session created but CLI may still be loading)`, 'yellow');
+    }
 
     // Start heartbeat in background if enabled
     if (enableHeartbeat) {
@@ -885,18 +941,22 @@ if (command === 'help' || !command) {
 
   // Spawn in new tmux window
   // Always use tmux for reliability
-  spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat, null, resolvedCwd);
+  (async () => {
+    await spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat, null, resolvedCwd);
 
-  log(`\n✅ Created new window for session "${sessionName}"!`, 'green');
-  // Show parent info if spawned from another session
-  const effectiveParentSessionId = process.env.CODERS_SESSION_ID || null;
-  if (effectiveParentSessionId) {
-    log(`👪 Parent session: ${effectiveParentSessionId}`, 'blue');
-  }
-  log(`💡 Attach: coders attach ${sessionName}`, 'yellow');
-  if (enableHeartbeat) {
-    log(`💡 View dashboard: coders dashboard`, 'yellow');
-  }
+    log(`\n✅ Session "${sessionName}" is ready!`, 'green');
+    // Show parent info if spawned from another session
+    const effectiveParentSessionId = process.env.CODERS_SESSION_ID || null;
+    if (effectiveParentSessionId) {
+      log(`👪 Parent session: ${effectiveParentSessionId}`, 'blue');
+    }
+    log(`💡 Attach: coders attach ${sessionName}`, 'yellow');
+    if (enableHeartbeat) {
+      log(`💡 View dashboard: coders dashboard`, 'yellow');
+    }
+  })().catch((err) => {
+    log(`❌ Failed to spawn session: ${err.message}`, 'red');
+  });
 } else {
   log(`Unknown command: ${command}`, 'red');
   usage();
