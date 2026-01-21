@@ -1,0 +1,44 @@
+{
+  "name": "@jayphen/coders",
+  "version": "1.1.9",
+  "description": "Spawn AI coding assistants (Claude, Gemini, Codex, OpenCode) in isolated tmux sessions with git worktree support",
+  "main": "skills/coders/coders.ts",
+  "types": "skills/coders/coders.d.ts",
+  "type": "module",
+  "author": "Jayphen",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jayphen/coders",
+    "directory": "packages/plugin"
+  },
+  "keywords": [
+    "claude-code",
+    "claude-code-plugin",
+    "ai",
+    "claude",
+    "gemini",
+    "codex",
+    "opencode",
+    "spawn",
+    "tmux",
+    "multi-agent"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "bugs": {
+    "url": "https://github.com/Jayphen/coders/issues"
+  },
+  "homepage": "https://github.com/Jayphen/coders#readme",
+  "dependencies": {
+    "redis": "^5.0.0"
+  },
+  "files": [
+    ".claude-plugin",
+    "commands",
+    "skills",
+    "bin",
+    "README.md"
+  ]
+}
