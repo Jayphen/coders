@@ -55,11 +55,24 @@ function getUsageStats() {
     // "Tokens: 1234"
     // "Context tokens: 1000"
     // "Generated tokens: 50"
+    // Claude TUI: "Current session" -> "98% used"
     
     const stats = {};
     const lines = output.split('\n');
     
-    // Reverse iterate to find the most recent stats
+    // Check for Claude TUI visual usage patterns (multi-line)
+    const fullText = lines.join('\n');
+    const sessionPercentMatch = fullText.match(/Current session\s*\n[█\s]*(\d+)%\s*used/);
+    if (sessionPercentMatch) {
+      stats.sessionLimitPercent = parseInt(sessionPercentMatch[1], 10);
+    }
+    
+    const weeklyPercentMatch = fullText.match(/Current week \(all models\)\s*\n[█\s]*(\d+)%\s*used/);
+    if (weeklyPercentMatch) {
+      stats.weeklyLimitPercent = parseInt(weeklyPercentMatch[1], 10);
+    }
+    
+    // Reverse iterate to find the most recent stats (text based)
     for (let i = lines.length - 1; i >= 0; i--) {
       const line = lines[i].trim();
       

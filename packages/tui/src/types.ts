@@ -16,6 +16,8 @@ export interface Session {
     cost?: string;
     tokens?: number;
     apiCalls?: number;
+    sessionLimitPercent?: number;
+    weeklyLimitPercent?: number;
   };
 }
 
@@ -30,6 +32,8 @@ export interface HeartbeatData {
     cost?: string;
     tokens?: number;
     apiCalls?: number;
+    sessionLimitPercent?: number;
+    weeklyLimitPercent?: number;
   };
 }
 

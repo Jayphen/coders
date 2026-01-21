@@ -28,6 +28,13 @@ const PROMISE_STATUS_LABELS: Record<string, { label: string; color: string }> = 
   'needs-review': { label: 'Needs Review', color: 'yellow' },
 };
 
+function renderProgressBar(percent: number, width: number = 20): string {
+  const filled = Math.round((percent / 100) * width);
+  const empty = width - filled;
+  const bar = '█'.repeat(Math.max(0, filled)) + '░'.repeat(Math.max(0, empty));
+  return bar;
+}
+
 export function SessionDetail({ session }: Props) {
   if (!session) {
     return null;
@@ -136,6 +143,32 @@ export function SessionDetail({ session }: Props) {
             {session.usage.apiCalls && (
               <Box marginLeft={2}>
                 <Text>API Calls: {session.usage.apiCalls}</Text>
+              </Box>
+            )}
+            {session.usage.sessionLimitPercent !== undefined && (
+              <Box marginLeft={2} flexDirection="column">
+                <Box>
+                  <Text dimColor>Session Limit: </Text>
+                  <Text color={session.usage.sessionLimitPercent > 90 ? 'red' : 'green'}>
+                    {session.usage.sessionLimitPercent}%
+                  </Text>
+                </Box>
+                <Text color={session.usage.sessionLimitPercent > 90 ? 'red' : 'green'}>
+                  {renderProgressBar(session.usage.sessionLimitPercent)}
+                </Text>
+              </Box>
+            )}
+            {session.usage.weeklyLimitPercent !== undefined && (
+              <Box marginLeft={2} flexDirection="column" marginTop={1}>
+                <Box>
+                  <Text dimColor>Weekly Limit: </Text>
+                  <Text color={session.usage.weeklyLimitPercent > 90 ? 'red' : 'green'}>
+                    {session.usage.weeklyLimitPercent}%
+                  </Text>
+                </Box>
+                <Text color={session.usage.weeklyLimitPercent > 90 ? 'red' : 'green'}>
+                  {renderProgressBar(session.usage.weeklyLimitPercent)}
+                </Text>
               </Box>
             )}
           </Box>
