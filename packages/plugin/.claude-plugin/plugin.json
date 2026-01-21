@@ -27,9 +27,9 @@
     "dashboard"
   ],
   "skills": [
-    "./packages/plugin/skills/coders"
+    "./skills/coders"
   ],
   "commands": [
-    "./packages/plugin/commands"
+    "./commands"
   ]
 }
