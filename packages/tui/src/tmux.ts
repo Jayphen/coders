@@ -94,6 +94,25 @@ function getHeartbeats(): Map<string, HeartbeatData> {
   return heartbeats;
 }
 
+/**
+ * Query Redis for global usage stats
+ */
+export function getGlobalUsage(): { weeklyLimitPercent?: number; weeklySonnetPercent?: number } | null {
+  try {
+    const value = execSync(
+      `redis-cli --no-auth-warning GET "coders:usage:global" 2>/dev/null`,
+      { encoding: 'utf-8', timeout: 1000 }
+    ).trim();
+    
+    if (value) {
+      return JSON.parse(value);
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export async function getTmuxSessions(): Promise<Session[]> {
   try {
     // Get session info including pane title (which may contain task description)
@@ -110,7 +129,7 @@ export async function getTmuxSessions(): Promise<Session[]> {
     const sessions: Session[] = output
       .trim()
       .split('\n')
-      .filter(line => line.startsWith('coder-'))
+      .filter(line => line.startsWith('coder-') && !line.startsWith('coder-usage-monitor'))
       .map(line => {
         const [name, created, cwd, paneTitle] = line.split('|');
 
