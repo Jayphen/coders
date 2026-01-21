@@ -44,8 +44,6 @@ async function publishHeartbeat() {
     paneId,
     sessionId,
     timestamp: Date.now(),
-    status: 'alive',
-    lastActivity: 'working',
     parentSessionId
   };
 

@@ -1007,10 +1007,11 @@
       const sessionMap = new Map(regularSessions.map(s => [s.sessionId, s]));
 
       // Identify root sessions (no parent or parent not in active sessions)
+      // Sessions are sorted alphabetically by sessionId (older sessions first, newer last)
+      // This puts newest sessions at the bottom of the page
       const rootSessions = regularSessions.filter(s =>
         !s.parentSessionId || !sessionMap.has(s.parentSessionId)
       );
-      const orderedRootSessions = rootSessions.slice().reverse();
 
       // Build hierarchical groups
       function renderSessionCard(session, isChild = false) {
@@ -1098,16 +1099,16 @@
       }
 
       function renderSessionGroup(session) {
+        // Children are also kept in natural order (older first, newer last)
         const childSessions = (session.children || [])
           .map(childId => sessionMap.get(childId))
           .filter(Boolean);
-        const orderedChildren = childSessions.slice().reverse();
 
-        if (orderedChildren.length === 0) {
+        if (childSessions.length === 0) {
           return renderSessionCard(session, false);
         }
 
-        const childrenHtml = orderedChildren.map(child => {
+        const childrenHtml = childSessions.map(child => {
           // Recursively render child groups if they have their own children
           const grandchildren = (child.children || [])
             .map(id => sessionMap.get(id))
@@ -1128,7 +1129,7 @@
         `;
       }
 
-      grid.innerHTML = orderedRootSessions.map(session => renderSessionGroup(session)).join('');
+      grid.innerHTML = rootSessions.map(session => renderSessionGroup(session)).join('');
 
       const activeIds = new Set(regularSessions.map(s => s.sessionId));
       for (const sessionId of sessionSignatures.keys()) {

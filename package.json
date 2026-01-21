@@ -1,41 +1,23 @@
 {
-  "name": "@jayphen/coders",
-  "version": "1.1.8",
-  "description": "Spawn AI coding assistants in isolated tmux sessions - Claude Code Plugin + CLI",
-  "main": "skills/coders/coders.ts",
-  "types": "skills/coders/coders.d.ts",
-  "scripts": {
-    "test": "node skills/coders/scripts/test.js",
-    "plugin:test": "claude --plugin-dir ."
-  },
-  "author": "Jayphen",
-  "repository": "https://github.com/Jayphen/coders",
-  "keywords": [
-    "claude-code",
-    "claude-code-plugin",
-    "ai",
-    "claude",
-    "gemini",
-    "codex",
-    "opencode",
-    "spawn",
-    "tmux"
+  "name": "coders-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*"
   ],
-  "license": "MIT",
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "type": "module",
-  "bugs": {
-    "url": "https://github.com/Jayphen/coders/issues"
-  },
-  "homepage": "https://github.com/Jayphen/coders#readme",
-  "dependencies": {
-    "redis": "^5.0.0"
+  "scripts": {
+    "test": "vitest",
+    "test:plugin": "vitest --project plugin",
+    "dev:tui": "pnpm --filter @jayphen/coders-tui dev",
+    "build": "pnpm -r build",
+    "plugin:test": "claude --plugin-dir packages/plugin"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.17"
-  }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
 }
