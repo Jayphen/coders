@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 import { render } from 'ink';
 import { execSync, spawnSync } from 'child_process';
+import * as tty from 'tty';
 import { App } from './app.js';
 
 const TUI_SESSION = 'coders-tui';
 
 function isInsideTmux(): boolean {
   return !!process.env.TMUX;
+}
+
+function hasTTY(): boolean {
+  return tty.isatty(process.stdin.fd) && tty.isatty(process.stdout.fd);
 }
 
 function tuiSessionExists(): boolean {
@@ -27,15 +32,30 @@ function launchInTmuxSession(): void {
   const runner = isTsx ? 'tsx' : 'node';
 
   if (tuiSessionExists()) {
-    // Session exists, attach to it
-    spawnSync('tmux', ['attach', '-t', TUI_SESSION], {
-      stdio: 'inherit',
-    });
+    if (hasTTY()) {
+      // Session exists and we have a TTY, attach to it
+      spawnSync('tmux', ['attach', '-t', TUI_SESSION], {
+        stdio: 'inherit',
+      });
+    } else {
+      // No TTY (running from Claude Code, etc.) - tell user how to attach
+      console.log(`\x1b[32m✓ TUI session already running\x1b[0m`);
+      console.log(`  Attach with: tmux attach -t ${TUI_SESSION}`);
+    }
   } else {
-    // Create new session running the TUI
-    spawnSync('tmux', ['new-session', '-s', TUI_SESSION, '-n', 'tui', runner, scriptPath], {
-      stdio: 'inherit',
-    });
+    if (hasTTY()) {
+      // Create new session running the TUI and attach
+      spawnSync('tmux', ['new-session', '-s', TUI_SESSION, '-n', 'tui', runner, scriptPath], {
+        stdio: 'inherit',
+      });
+    } else {
+      // No TTY - create detached session
+      spawnSync('tmux', ['new-session', '-d', '-s', TUI_SESSION, '-n', 'tui', runner, scriptPath], {
+        stdio: 'inherit',
+      });
+      console.log(`\x1b[32m✓ TUI session started\x1b[0m`);
+      console.log(`  Attach with: tmux attach -t ${TUI_SESSION}`);
+    }
   }
 }
 
