@@ -540,6 +540,42 @@
     .parent-link a:hover {
       text-decoration: underline;
     }
+
+    /* Activity indicator styles */
+    .activity-indicator {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .activity-indicator.active {
+      background: #238636;
+      color: #fff;
+    }
+
+    .activity-indicator.idle {
+      background: #9e6a03;
+      color: #fff;
+    }
+
+    .activity-indicator.waiting {
+      background: #1f6feb;
+      color: #fff;
+    }
+
+    .activity-indicator.stale {
+      background: #6e7681;
+      color: #fff;
+    }
+
+    .activity-indicator.unknown {
+      background: #30363d;
+      color: #8b949e;
+    }
   </style>
 </head>
 <body>
@@ -672,7 +708,9 @@
         document.getElementById('orchestrator-status').className = `status ${orchestrator.status}`;
         document.getElementById('orchestrator-last-seen').textContent = timeSince;
         document.getElementById('orchestrator-last-response').textContent = responseSince;
-        document.getElementById('orchestrator-activity').textContent = orchestrator.lastActivity;
+        const activityEl = document.getElementById('orchestrator-activity');
+        activityEl.textContent = orchestrator.lastActivity;
+        activityEl.className = `orchestrator-stat-value activity-indicator ${orchestrator.lastActivity}`;
         document.getElementById('orchestrator-windows').textContent = orchestrator.windows;
 
         const cwdEl = document.getElementById('orchestrator-cwd');
@@ -766,7 +804,7 @@
               </div>
               <div>Last response: ${responseSince} ${typingIndicator}</div>
               <div>Windows: ${session.windows}</div>
-              <div>Activity: ${session.lastActivity}</div>
+              <div>Activity: <span class="activity-indicator ${session.lastActivity}">${session.lastActivity}</span></div>
               ${session.cwd ? `<div title="${session.cwd}">📁 ${truncatePath(session.cwd)}</div>` : ''}
             </div>
             <div class="actions">

@@ -63,6 +63,15 @@ function getFormattedSessionList() {
 
   refreshResponseTimes(tmuxSessions);
 
+  // Clean up sessions Map: remove heartbeat data for sessions no longer in tmux
+  const activeTmuxSessionIds = new Set(tmuxSessions.map(s => s.sessionId));
+  for (const [paneId, session] of sessions.entries()) {
+    if (!activeTmuxSessionIds.has(session.sessionId)) {
+      sessions.delete(paneId);
+      console.log(`[Cleanup] Removed heartbeat data for dead session: ${session.sessionId}`);
+    }
+  }
+
   const sessionList = tmuxSessions.map(tmux => {
     const heartbeat = Array.from(sessions.values())
       .find(s => s.sessionId === tmux.sessionId);
@@ -72,15 +81,31 @@ function getFormattedSessionList() {
     const isAlive = heartbeat && (now - lastSeen < 180000); // 3 min threshold
     const isOrchestrator = tmux.sessionId === ORCHESTRATOR_SESSION_ID;
 
+    // Compute meaningful activity based on output changes
+    const lastResponseAt = responseState?.lastResponseAt || heartbeat?.lastResponseAt || null;
+    let computedActivity = 'unknown';
+    if (lastResponseAt) {
+      const responseAge = now - lastResponseAt;
+      if (responseAge <= 30000) {
+        computedActivity = 'active';  // Output changed in last 30 seconds
+      } else if (isAlive) {
+        computedActivity = 'idle';    // Alive but no recent output
+      } else {
+        computedActivity = 'stale';   // No heartbeat and no recent output
+      }
+    } else if (isAlive) {
+      computedActivity = 'waiting';   // Alive but no output tracked yet
+    }
+
     return {
       sessionId: tmux.sessionId,
       windows: tmux.windows,
       status: isAlive ? 'alive' : 'unknown',
       lastHeartbeat: heartbeat?.timestamp || null,
       lastSeen: lastSeen || null,
-      lastResponseAt: responseState?.lastResponseAt || heartbeat?.lastResponseAt || null,
+      lastResponseAt: lastResponseAt,
       paneId: heartbeat?.paneId || null,
-      lastActivity: heartbeat?.lastActivity || 'unknown',
+      lastActivity: computedActivity,
       isOrchestrator: isOrchestrator,
       cwd: getSessionCwd(tmux.sessionId),
       parentSessionId: heartbeat?.parentSessionId || null

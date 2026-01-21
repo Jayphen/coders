@@ -1,6 +1,6 @@
 {
   "name": "@jayphen/coders",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "Spawn AI coding assistants in isolated tmux sessions - Claude Code Plugin + CLI",
   "main": "skills/coders/coders.ts",
   "types": "skills/coders/coders.d.ts",
