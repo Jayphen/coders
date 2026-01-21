@@ -1,6 +1,6 @@
 {
   "name": "@jayphen/coders",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "Spawn AI coding assistants (Claude, Gemini, Codex, OpenCode) in isolated tmux sessions with git worktree support",
   "main": "skills/coders/coders.ts",
   "types": "skills/coders/coders.d.ts",

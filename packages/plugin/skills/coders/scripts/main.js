@@ -146,18 +146,19 @@ function generateInitialPrompt(tool, taskDescription, contextFiles = []) {
 }
 
 /**
- * CLI banner patterns to detect when each tool is ready
+ * Process names to detect for each CLI tool
  */
-const CLI_READY_PATTERNS = {
-  'claude': /Claude Code|claude-code|╭|Tips for getting started/i,
-  'claude-code': /Claude Code|claude-code|╭|Tips for getting started/i,
-  'gemini': /Gemini|gemini-cli|Welcome to Gemini/i,
-  'codex': /Codex|codex-cli|OpenAI/i,
-  'opencode': /OpenCode|opencode|Welcome/i
+const CLI_PROCESS_NAMES = {
+  'claude': 'claude',
+  'claude-code': 'claude',
+  'gemini': 'gemini',
+  'codex': 'codex',
+  'opencode': 'opencode',
+  'open-code': 'opencode'
 };
 
 /**
- * Wait for the CLI to be ready by polling the tmux pane for the banner
+ * Wait for the CLI to be ready by detecting the tool process running in the tmux pane
  * @param {string} sessionId - The tmux session ID
  * @param {string} tool - The CLI tool name
  * @param {number} timeoutMs - Timeout in milliseconds (default: 30000)
@@ -165,22 +166,44 @@ const CLI_READY_PATTERNS = {
  * @returns {Promise<boolean>} - True if CLI is ready, false if timeout
  */
 async function waitForCliReady(sessionId, tool, timeoutMs = 30000, pollIntervalMs = 500) {
-  const pattern = CLI_READY_PATTERNS[tool] || CLI_READY_PATTERNS['claude'];
+  const processName = CLI_PROCESS_NAMES[tool] || tool;
   const startTime = Date.now();
 
-  log(`⏳ Waiting for ${tool} CLI to start...`, 'blue');
+  log(`⏳ Waiting for ${tool} process to start...`, 'blue');
 
   while (Date.now() - startTime < timeoutMs) {
     try {
-      // Capture the tmux pane content
-      const paneContent = execSync(`tmux capture-pane -t "${sessionId}" -p 2>/dev/null`, {
+      // Get the pane PID from tmux
+      const panePid = execSync(`tmux display-message -t "${sessionId}" -p '#{pane_pid}'`, {
         encoding: 'utf8',
         timeout: 5000
-      });
+      }).trim();
 
-      // Check if the CLI banner is present
-      if (pattern.test(paneContent)) {
-        return true;
+      if (panePid) {
+        // Check if the tool process is running as a child of the pane
+        const children = execSync(`pgrep -P ${panePid} 2>/dev/null || true`, {
+          encoding: 'utf8',
+          timeout: 5000
+        }).trim();
+
+        if (children) {
+          // Get process names of children to verify the right tool is running
+          const childPids = children.split('\n').filter(Boolean);
+          for (const childPid of childPids) {
+            try {
+              const procName = execSync(`ps -p ${childPid} -o comm= 2>/dev/null || true`, {
+                encoding: 'utf8',
+                timeout: 5000
+              }).trim();
+
+              if (procName && procName.includes(processName)) {
+                return true;
+              }
+            } catch {
+              // Process may have exited, continue checking
+            }
+          }
+        }
       }
     } catch {
       // Session might not be ready yet, continue polling
@@ -259,12 +282,12 @@ async function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, ena
     execSync(fullCmd);
     log(`✅ Created tmux session: ${sessionId}`, 'green');
 
-    // Wait for the CLI to be ready before returning
+    // Wait for the CLI process to be ready before returning
     const cliReady = await waitForCliReady(sessionId, tool);
     if (cliReady) {
-      log(`✅ ${tool} CLI is ready`, 'green');
+      log(`✅ ${tool} process is running`, 'green');
     } else {
-      log(`⚠️  Timeout waiting for ${tool} CLI (session created but CLI may still be loading)`, 'yellow');
+      log(`⚠️  Timeout waiting for ${tool} process (session created but process may still be starting)`, 'yellow');
     }
 
     // Start heartbeat in background if enabled
