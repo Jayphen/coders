@@ -93,6 +93,18 @@ All commands use the skill syntax:
 /coders:dashboard
 ```
 
+### Spawning in Different Directories
+
+**IMPORTANT:** By default, sessions run in your current directory. Use `--cwd` to spawn in a different project:
+
+```bash
+# Spawn in a specific project directory
+/coders:spawn claude --cwd ~/Dev/flp/vega --task "Fix the API bug"
+
+# Spawn in another project while staying in your current directory
+/coders:spawn gemini --cwd ~/projects/frontend --task "Review React components"
+```
+
 ### Git Worktree Isolation
 
 ```bash
@@ -178,6 +190,7 @@ tmux capture-pane -t coder-SESSION_ID -p | tail -20
 - `tool` - AI tool: `claude`, `gemini`, `codex`, `opencode` (default: `claude`)
 - `--task` - Task description (required)
 - `--name` - Custom session name (optional, auto-generated if omitted)
+- `--cwd` - Working directory for the session (default: current directory)
 - `--worktree` - Git branch for worktree (optional)
 - `--base-branch` - Base branch for worktree (default: `main`)
 - `--prd` - PRD/spec file path to include as context (optional)
@@ -193,11 +206,12 @@ tmux capture-pane -t coder-SESSION_ID -p | tail -20
 
 ## Tips
 
-1. **Use the orchestrator** for complex multi-agent workflows
-2. **Save snapshots regularly** to preserve session state
-3. **Use worktrees** to avoid branch switching conflicts
-4. **Enable Redis heartbeat** for production-like agent monitoring
-5. **Use the dashboard** to monitor multiple sessions visually
+1. **Use `--cwd` to spawn in different projects** - Sessions default to your current directory. Always specify `--cwd ~/path/to/project` when you want a session to work in a different codebase.
+2. **Use the orchestrator** for complex multi-agent workflows
+3. **Save snapshots regularly** to preserve session state
+4. **Use worktrees** to avoid branch switching conflicts
+5. **Enable Redis heartbeat** for production-like agent monitoring
+6. **Use the dashboard** to monitor multiple sessions visually
 
 ## Troubleshooting
 
