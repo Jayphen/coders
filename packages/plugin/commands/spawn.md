@@ -30,6 +30,7 @@ Spawn Claude, Gemini, Codex, or OpenCode in an isolated tmux window with optiona
 
 - `tool` - AI tool: claude, gemini, codex, opencode (default: claude)
 - `--name` - Session name (auto-generated from task if omitted)
+- `--model` - Model identifier passed to the tool CLI (optional)
 - `--task` - Task description for the AI
 - `--cwd`, `--dir` - Working directory for the session (default: git root). Supports [zoxide](https://github.com/ajeetdsouza/zoxide) for smart path resolution (e.g., `--cwd myproj` will resolve to your most frecent matching directory)
 - `--worktree` - Git branch for worktree (optional)
@@ -43,6 +44,7 @@ Spawn Claude, Gemini, Codex, or OpenCode in an isolated tmux window with optiona
 /coders:spawn claude --task "Build the authentication module"
 /coders:spawn gemini --task "Research JWT vs Session auth" --worktree research/jwt
 /coders:spawn opencode --task "Fix the login bug" --prd docs/auth-prd.md
+/coders:spawn claude --model claude-3-5-sonnet --task "Review the PR"
 /coders:spawn claude --cwd ~/projects/myapp --task "Refactor the API layer"
 /coders:spawn claude --cwd myapp --task "Fix bug"  # Uses zoxide to resolve "myapp"
 ```

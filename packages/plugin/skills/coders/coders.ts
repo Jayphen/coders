@@ -54,6 +54,8 @@ export interface SpawnOptions {
   tool: 'claude' | 'gemini' | 'codex' | 'opencode';
   task?: string;
   name?: string;
+  /** Optional model identifier passed to the tool CLI */
+  model?: string;
   worktree?: string;
   baseBranch?: string;
   prd?: string;
@@ -157,7 +159,8 @@ function buildCommand(
   paneId?: string,
   redisConfig?: RedisConfig,
   sessionId?: string,
-  parentSessionId?: string
+  parentSessionId?: string,
+  model?: string
 ): string {
   const envVars: string[] = [];
 
@@ -182,15 +185,16 @@ function buildCommand(
   }
 
   const env = envVars.length > 0 ? envVars.join(' ') + ' ' : '';
+  const modelArg = model ? ` --model "${model}"` : '';
   
   if (tool === 'claude' || tool === 'claude-code') {
-    return `${env}claude --dangerously-spawn-permission -f "${promptFile}"`;
+    return `${env}claude --dangerously-spawn-permission${modelArg} -f "${promptFile}"`;
   } else if (tool === 'gemini') {
-    return `${env}gemini -f "${promptFile}"`;
+    return `${env}gemini${modelArg} -f "${promptFile}"`;
   } else if (tool === 'codex') {
-    return `${env}codex -f "${promptFile}"`;
+    return `${env}codex${modelArg} -f "${promptFile}"`;
   } else if (tool === 'opencode') {
-    return `${env}opencode -f "${promptFile}"`;
+    return `${env}opencode${modelArg} -f "${promptFile}"`;
   }
   throw new Error(`Unknown tool: ${tool}`);
 }
@@ -258,7 +262,8 @@ export async function spawn(options: SpawnOptions): Promise<string> {
     paneId: providedPaneId,
     parentSessionId: providedParentSessionId,
     cwd: customCwd,
-    useAI = true
+    useAI = true,
+    model
   } = options;
 
   // Auto-detect parent session if running inside a coder session
@@ -311,7 +316,7 @@ export async function spawn(options: SpawnOptions): Promise<string> {
   fs.writeFileSync(promptFile, prompt);
 
   // Build command with environment variables (use effectiveCwd for WORKSPACE_DIR)
-  const cmd = buildCommand(tool, promptFile, effectiveCwd, paneId, redisConfig, sessionId, parentSessionId);
+  const cmd = buildCommand(tool, promptFile, effectiveCwd, paneId, redisConfig, sessionId, parentSessionId, model);
 
   try {
     // Clean up existing session if any
@@ -346,6 +351,7 @@ export async function spawn(options: SpawnOptions): Promise<string> {
 **Working Directory:** ${effectiveCwd}
 **Worktree:** ${worktreePath || 'none'}
 **Task:** ${task}
+**Model:** ${model || 'default'}
 **PRD:** ${prd || 'none'}
 **Redis:** ${redisConfig?.url || 'disabled'}
 **Heartbeat:** ${enableHeartbeat ? 'enabled' : 'disabled'}
@@ -406,6 +412,7 @@ export async function claude(
   task: string,
   options?: {
     name?: string;
+    model?: string;
     worktree?: string;
     prd?: string;
     redis?: RedisConfig;
@@ -420,6 +427,7 @@ export async function gemini(
   task: string,
   options?: {
     name?: string;
+    model?: string;
     worktree?: string;
     prd?: string;
     redis?: RedisConfig;
@@ -434,6 +442,7 @@ export async function codex(
   task: string,
   options?: {
     name?: string;
+    model?: string;
     worktree?: string;
     prd?: string;
     redis?: RedisConfig;
@@ -448,6 +457,7 @@ export async function opencode(
   task: string,
   options?: {
     name?: string;
+    model?: string;
     worktree?: string;
     prd?: string;
     redis?: RedisConfig;
@@ -465,7 +475,8 @@ export async function worktree(
   branchName: string,
   task: string,
   options?: {
-    tool?: 'claude' | 'gemini' | 'codex';
+    tool?: 'claude' | 'gemini' | 'codex' | 'opencode';
+    model?: string;
     prd?: string;
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
@@ -476,6 +487,7 @@ export async function worktree(
     tool: options?.tool || 'claude',
     task,
     worktree: branchName,
+    model: options?.model,
     prd: options?.prd,
     redis: options?.redis,
     enableHeartbeat: options?.enableHeartbeat,

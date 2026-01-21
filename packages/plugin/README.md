@@ -41,6 +41,7 @@ import { coders } from '@jayphen/coders';
 await coders.spawn({
   tool: 'claude',
   task: 'Refactor the authentication module',
+  model: 'claude-3-5-sonnet',
   worktree: 'feature/auth-refactor',
   prd: 'docs/auth-prd.md'
 });

@@ -216,7 +216,7 @@ async function waitForCliReady(sessionId, tool, timeoutMs = 30000, pollIntervalM
   return false;
 }
 
-function buildSpawnCommand(tool, promptFile, prompt, extraEnv = {}) {
+function buildSpawnCommand(tool, promptFile, prompt, extraEnv = {}, model = null) {
   let cmd;
   // Escape single quotes in prompt for shell safety
   const escapedPrompt = prompt.replace(/'/g, "'\\''");
@@ -227,26 +227,27 @@ function buildSpawnCommand(tool, promptFile, prompt, extraEnv = {}) {
     .map(([k, v]) => `${k}="${v}"`)
     .join(' ');
   const envPrefix = envStr ? envStr + ' ' : '';
+  const modelArg = model ? ` --model "${model}"` : '';
 
   if (tool === 'claude' || tool === 'claude-code') {
     // Claude stays interactive by default - pass prompt via stdin
     // Add --dangerously-skip-permissions to auto-approve file operations
-    cmd = `${envPrefix}claude --dangerously-skip-permissions < "${promptFile}"`;
+    cmd = `${envPrefix}claude --dangerously-skip-permissions${modelArg} < "${promptFile}"`;
   } else if (tool === 'gemini') {
     // Gemini: use --prompt-interactive with the prompt text to execute and stay interactive
-    cmd = `${envPrefix}gemini --yolo --prompt-interactive '${escapedPrompt}'`;
+    cmd = `${envPrefix}gemini --yolo${modelArg} --prompt-interactive '${escapedPrompt}'`;
   } else if (tool === 'codex' || tool === 'openai-codex') {
     // Codex: provide initial prompt as positional argument, stays interactive by default
-    cmd = `${envPrefix}codex --dangerously-bypass-approvals-and-sandbox '${escapedPrompt}'`;
+    cmd = `${envPrefix}codex --dangerously-bypass-approvals-and-sandbox${modelArg} '${escapedPrompt}'`;
   } else if (tool === 'opencode' || tool === 'open-code') {
     // OpenCode: pass prompt via stdin like Claude
-    cmd = `${envPrefix}opencode < "${promptFile}"`;
+    cmd = `${envPrefix}opencode${modelArg} < "${promptFile}"`;
   }
 
   return cmd;
 }
 
-async function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat = false, parentSessionId = null, customCwd = null) {
+async function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat = false, parentSessionId = null, customCwd = null, model = null) {
   const sessionId = `${TMUX_SESSION_PREFIX}${sessionName}`;
   const promptFile = `/tmp/coders-prompt-${Date.now()}.txt`;
   fs.writeFileSync(promptFile, prompt);
@@ -264,7 +265,7 @@ async function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, ena
     WORKSPACE_DIR: effectiveCwd,
     CODERS_SESSION_ID: sessionId,
     CODERS_PARENT_SESSION_ID: effectiveParentSessionId
-  });
+  }, model);
 
   log(`Creating NEW tmux window for: ${sessionId}`, 'blue');
 
@@ -315,8 +316,8 @@ async function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, ena
   }
 }
 
-function spawnInITerm(tool, worktreePath, prompt, sessionName) {
-  const cmd = buildSpawnCommand(tool, `/tmp/coders-prompt-${Date.now()}.txt`, { WORKSPACE_DIR: worktreePath });
+function spawnInITerm(tool, worktreePath, prompt, sessionName, model = null) {
+  const cmd = buildSpawnCommand(tool, `/tmp/coders-prompt-${Date.now()}.txt`, { WORKSPACE_DIR: worktreePath }, model);
   fs.writeFileSync(`/tmp/coders-prompt-${Date.now()}.txt`, prompt);
   
   log(`Creating NEW iTerm2 window for: ${sessionName}`, 'blue');
@@ -593,6 +594,7 @@ ${colors.green}Plugin Update:${colors.reset}
 
 ${colors.green}Options:${colors.reset}
   --name <name>          Session name (auto-generated if omitted)
+  --model <model>        Model identifier to pass to the tool CLI
   --worktree <branch>    Create git worktree for this branch
   --base <branch>        Base branch for worktree (default: main)
   --prd <file>           Read PRD/spec file and prime the AI
@@ -606,6 +608,7 @@ ${colors.green}Examples:${colors.reset}
   coders orchestrator
   coders spawn claude --worktree feature/auth --prd docs/prd.md
   coders spawn gemini --name my-session --task "Fix the login bug"
+  coders spawn claude --model claude-3-5-sonnet --task "Review the PR"
   coders spawn claude --cwd ~/projects/myapp --task "Refactor the API"
   coders list
   coders attach feature-auth
@@ -917,6 +920,7 @@ if (command === 'help' || !command) {
   let taskDesc = 'Complete the assigned task';
   let enableHeartbeat = true; // Enabled by default for dashboard tracking
   let customCwd = null; // Optional working directory
+  let model = null;
 
   for (let i = argStartIndex; i < args.length; i++) {
     const arg = args[i];
@@ -934,6 +938,9 @@ if (command === 'help' || !command) {
       i++;
     } else if (arg === '--task' && args[i+1]) {
       taskDesc = args[i+1];
+      i++;
+    } else if (arg === '--model' && args[i+1]) {
+      model = args[i+1];
       i++;
     } else if ((arg === '--cwd' || arg === '--dir') && args[i+1]) {
       // Store raw path arg - will be resolved later with zoxide support
@@ -999,7 +1006,7 @@ if (command === 'help' || !command) {
   // Spawn in new tmux window
   // Always use tmux for reliability
   (async () => {
-    await spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat, null, resolvedCwd);
+    await spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, enableHeartbeat, null, resolvedCwd, model);
 
     log(`\n✅ Session "${sessionName}" is ready!`, 'green');
     // Show parent info if spawned from another session

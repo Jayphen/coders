@@ -7,12 +7,14 @@
 // ============================================================================
 
 export interface SpawnOptions {
-  /** AI tool to spawn: claude, gemini, or codex */
-  tool: 'claude' | 'gemini' | 'codex';
+  /** AI tool to spawn: claude, gemini, codex, or opencode */
+  tool: 'claude' | 'gemini' | 'codex' | 'opencode';
   /** Task description for the AI to work on */
   task?: string;
   /** Custom session name */
   name?: string;
+  /** Optional model identifier passed to the tool CLI */
+  model?: string;
   /** Git branch name for worktree (optional) */
   worktree?: string;
   /** Base branch for worktree (default: main) */
@@ -169,6 +171,8 @@ export const coders: {
   gemini: (task: string, options?: Omit<SpawnOptions, 'tool'>) => Promise<string>;
   /** Quick spawn Codex */
   codex: (task: string, options?: Omit<SpawnOptions, 'tool'>) => Promise<string>;
+  /** Quick spawn OpenCode */
+  opencode: (task: string, options?: Omit<SpawnOptions, 'tool'>) => Promise<string>;
   /** Quick spawn with worktree */
   worktree: (branchName: string, task: string, options?: Omit<SpawnOptions, 'tool'>) => Promise<string>;
   /** Create a git worktree */
