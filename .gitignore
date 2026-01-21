@@ -7,7 +7,7 @@ dist
 # Markdown files except README.md
 *.md
 !README.md
-!commands/*.md
+!**/commands/*.md
 !skills/**/*.md
 
 # Project planning/breakdown files (not part of plugin distribution)
