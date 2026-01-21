@@ -103,6 +103,9 @@ function buildSpawnCommand(tool, promptFile, prompt, extraEnv = {}) {
   } else if (tool === 'codex' || tool === 'openai-codex') {
     // Codex: provide initial prompt as positional argument, stays interactive by default
     cmd = `${envPrefix}codex --dangerously-bypass-approvals-and-sandbox '${escapedPrompt}'`;
+  } else if (tool === 'opencode' || tool === 'open-code') {
+    // OpenCode: pass prompt via stdin like Claude
+    cmd = `${envPrefix}opencode < "${promptFile}"`;
   }
 
   return cmd;
@@ -351,6 +354,7 @@ ${colors.green}Tools:${colors.reset}
   claude    - Anthropic Claude Code CLI
   gemini    - Google Gemini CLI
   codex     - OpenAI Codex CLI
+  opencode  - OpenCode CLI
 
 ${colors.green}Orchestrator:${colors.reset}
   coders orchestrator    - Start/attach to the orchestrator session
