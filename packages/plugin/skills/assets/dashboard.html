@@ -509,86 +509,6 @@
       margin-bottom: 20px;
     }
 
-    /* Parent-child session grouping */
-    .session-group {
-      margin-bottom: 20px;
-    }
-
-    .session-group .session-card.parent {
-      border-left: 3px solid #58a6ff;
-    }
-
-    .session-group .children-container {
-      margin-left: 25px;
-      padding-left: 20px;
-      border-left: 2px dashed #30363d;
-      margin-top: 10px;
-    }
-
-    .session-group .children-container .session-card {
-      margin-bottom: 10px;
-      background: #1a1f27;
-    }
-
-    .session-group .children-container .session-card:last-child {
-      margin-bottom: 0;
-    }
-
-    .parent-badge {
-      display: inline-block;
-      background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-      color: #fff;
-      padding: 2px 8px;
-      border-radius: 10px;
-      font-size: 10px;
-      font-weight: 600;
-      text-transform: uppercase;
-      margin-left: 8px;
-      letter-spacing: 0.5px;
-    }
-
-    .child-badge {
-      display: inline-block;
-      background: linear-gradient(135deg, #6e7681 0%, #8b949e 100%);
-      color: #fff;
-      padding: 2px 8px;
-      border-radius: 10px;
-      font-size: 10px;
-      font-weight: 600;
-      text-transform: uppercase;
-      margin-left: 8px;
-      letter-spacing: 0.5px;
-    }
-
-    .children-count {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      color: #58a6ff;
-      font-size: 12px;
-      margin-left: 8px;
-    }
-
-    .children-count svg {
-      width: 14px;
-      height: 14px;
-    }
-
-    .parent-link {
-      font-size: 12px;
-      color: #8b949e;
-      margin-bottom: 5px;
-    }
-
-    .parent-link a {
-      color: #58a6ff;
-      text-decoration: none;
-    }
-
-    .parent-link a:hover {
-      text-decoration: underline;
-    }
-
     /* Special keys styles */
     .special-keys-section {
       margin-top: 15px;
@@ -1021,17 +941,7 @@
         return;
       }
 
-      // Build session lookup map
-      const sessionMap = new Map(regularSessions.map(s => [s.sessionId, s]));
-
-      // Identify root sessions (no parent or parent not in active sessions)
-      // Sessions are sorted by creation time (oldest first, newest at the bottom)
-      const rootSessions = regularSessions.filter(s =>
-        !s.parentSessionId || !sessionMap.has(s.parentSessionId)
-      );
-
-      // Build hierarchical groups
-      function renderSessionCard(session, isChild = false) {
+      function renderSessionCard(session) {
         const timeSince = session.lastSeen
           ? formatTimeSince(Date.now() - session.lastSeen)
           : 'Never';
@@ -1063,45 +973,28 @@
         const isUpdated = previousSignature && previousSignature !== signature;
         sessionSignatures.set(session.sessionId, signature);
 
-        const hasChildren = session.children && session.children.length > 0;
-        const parentBadge = hasChildren ? `<span class="parent-badge">Parent</span>` : '';
-        const childBadge = isChild ? `<span class="child-badge">Child</span>` : '';
-        const childrenCount = hasChildren
-          ? `<span class="children-count">
-              <svg viewBox="0 0 16 16" fill="currentColor">
-                <path d="M5 3.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm0 5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm0 5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM7.75 3.25a.75.75 0 0 0 0 1.5h5.5a.75.75 0 0 0 0-1.5h-5.5Zm0 5a.75.75 0 0 0 0 1.5h5.5a.75.75 0 0 0 0-1.5h-5.5Zm0 5a.75.75 0 0 0 0 1.5h5.5a.75.75 0 0 0 0-1.5h-5.5Z"/>
-              </svg>
-              ${session.children.length} child${session.children.length > 1 ? 'ren' : ''}
-            </span>`
-          : '';
-
-        const parentLink = isChild && session.parentSessionId
-          ? `<div class="parent-link">↳ Child of <a href="#" onclick="scrollToSession('${session.parentSessionId}'); return false;">${session.parentSessionId}</a></div>`
-          : '';
-
         const heartbeatClass = session.hasHeartbeat ? 'has-heartbeat' : 'no-heartbeat';
         const heartbeatTitle = session.hasHeartbeat ? 'Heartbeat active' : 'No heartbeat';
 
         // Use displayName if available, otherwise fall back to sessionId
         const nameDisplay = session.displayName
           ? `<div class="session-name-container">
-               <div class="session-display-name">${session.displayName}${parentBadge}${childBadge}${childrenCount}</div>
+               <div class="session-display-name">${session.displayName}</div>
                <div class="session-id">${session.sessionId}</div>
              </div>`
-          : `<div class="session-name">${session.sessionId}${parentBadge}${childBadge}${childrenCount}</div>`;
+          : `<div class="session-name">${session.sessionId}</div>`;
 
         const taskLine = session.task
           ? `<div class="session-task" title="${escapeHtml(session.task)}">📝 ${escapeHtml(truncateText(session.task, 140))}</div>`
           : '';
 
         return `
-          <div class="session-card ${isStale ? 'stale' : ''} ${isUpdated ? 'pulse' : ''} ${hasChildren ? 'parent' : ''}" id="session-${session.sessionId.replace(/[^a-zA-Z0-9-]/g, '-')}">
+          <div class="session-card ${isStale ? 'stale' : ''} ${isUpdated ? 'pulse' : ''}" id="session-${session.sessionId.replace(/[^a-zA-Z0-9-]/g, '-')}">
             <div class="session-header">
               ${nameDisplay}
               <div class="status ${session.status}">${session.status}</div>
             </div>
             <div class="session-info">
-              ${parentLink}
               ${taskLine}
               <div>
                 <span class="heartbeat-indicator ${heartbeatClass}" title="${heartbeatTitle}"></span>
@@ -1120,53 +1013,13 @@
         `;
       }
 
-      function renderSessionGroup(session) {
-        // Children are also kept in natural order (older first, newer last)
-        const childSessions = (session.children || [])
-          .map(childId => sessionMap.get(childId))
-          .filter(Boolean);
-
-        if (childSessions.length === 0) {
-          return renderSessionCard(session, false);
-        }
-
-        const childrenHtml = childSessions.map(child => {
-          // Recursively render child groups if they have their own children
-          const grandchildren = (child.children || [])
-            .map(id => sessionMap.get(id))
-            .filter(Boolean);
-          if (grandchildren.length > 0) {
-            return renderSessionGroup(child);
-          }
-          return renderSessionCard(child, true);
-        }).join('');
-
-        return `
-          <div class="session-group">
-            ${renderSessionCard(session, false)}
-            <div class="children-container">
-              ${childrenHtml}
-            </div>
-          </div>
-        `;
-      }
-
-      grid.innerHTML = rootSessions.map(session => renderSessionGroup(session)).join('');
+      grid.innerHTML = regularSessions.map(session => renderSessionCard(session)).join('');
 
       const activeIds = new Set(regularSessions.map(s => s.sessionId));
       for (const sessionId of sessionSignatures.keys()) {
         if (!activeIds.has(sessionId)) {
           sessionSignatures.delete(sessionId);
         }
-      }
-    }
-
-    function scrollToSession(sessionId) {
-      const el = document.getElementById('session-' + sessionId.replace(/[^a-zA-Z0-9-]/g, '-'));
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('pulse');
-        setTimeout(() => el.classList.remove('pulse'), 1500);
       }
     }
 

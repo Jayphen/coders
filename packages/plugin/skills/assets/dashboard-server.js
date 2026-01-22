@@ -187,7 +187,6 @@ function getFormattedSessionList() {
       lastActivity: computedActivity,
       isOrchestrator: isOrchestrator,
       cwd: getSessionCwd(tmux.sessionId),
-      parentSessionId: heartbeat?.parentSessionId || null,
       createdAt: heartbeat?.createdAt || null,
       // Promise data
       promise: promise || null,
@@ -195,31 +194,10 @@ function getFormattedSessionList() {
     };
   });
 
-  // Build child session lookup map
-  const childrenMap = new Map();
-  sessionList.forEach(session => {
-    if (session.parentSessionId) {
-      if (!childrenMap.has(session.parentSessionId)) {
-        childrenMap.set(session.parentSessionId, []);
-      }
-      childrenMap.get(session.parentSessionId).push(session.sessionId);
-    }
-  });
-
-  // Add children info to each session
-  sessionList.forEach(session => {
-    session.children = childrenMap.get(session.sessionId) || [];
-  });
-
-  // Sort sessions: orchestrator first, then root sessions (no parent), then by creation time (oldest first)
+  // Sort sessions: orchestrator first, then by creation time (oldest first, newest at bottom)
   return sessionList.sort((a, b) => {
     if (a.isOrchestrator) return -1;
     if (b.isOrchestrator) return 1;
-    // Root sessions (no parent) come before child sessions
-    const aIsRoot = !a.parentSessionId;
-    const bIsRoot = !b.parentSessionId;
-    if (aIsRoot && !bIsRoot) return -1;
-    if (!aIsRoot && bIsRoot) return 1;
     // Sort by creation time (oldest first, so newest at the bottom)
     // Fall back to sessionId comparison if no createdAt timestamp
     const aTime = a.createdAt || 0;
