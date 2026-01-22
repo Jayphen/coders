@@ -27,6 +27,17 @@ function log(msg, color = 'reset') {
   console.log(`${colors[color]}${msg}${colors.reset}`);
 }
 
+function getTimeAgo(timestamp) {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 function getGitRoot() {
   try {
     return execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim();
@@ -721,6 +732,7 @@ async function startOrAttachOrchestrator() {
 ║                                                                            ║
 ║  - coders spawn <tool> [options]  : Spawn a new coder session             ║
 ║  - coders list                    : List all active sessions               ║
+║  - coders promises                : Check completion status of sessions    ║
 ║  - coders attach <session>        : Attach to a session                    ║
 ║  - coders kill <session>          : Kill a session                         ║
 ║  - coders dashboard               : Open the dashboard                     ║
@@ -730,6 +742,8 @@ async function startOrAttachOrchestrator() {
 
 Welcome to the Orchestrator session. You have full permissions to spawn and manage
 other coder sessions. Start by spawning your first session or listing existing ones.
+
+📌 TIP: Use 'coders promises' to see which spawned sessions have completed their tasks.
 `;
 
   const promptFile = `/tmp/coders-orchestrator-prompt.txt`;
@@ -1354,6 +1368,64 @@ if (command === 'help' || !command) {
     log(`\nThe orchestrator and dashboard have been notified.`, 'green');
   })().catch((err) => {
     log(`❌ Failed to publish promise: ${err.message}`, 'red');
+  });
+} else if (command === 'promises' || command === 'check-promises') {
+  // List all promises (completion summaries)
+  (async () => {
+    const depsOk = await ensureDependencies();
+    if (!depsOk) {
+      log(`❌ Cannot check promises without redis dependency.`, 'red');
+      return;
+    }
+
+    const { createClient } = await import('redis');
+    const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+    const PROMISE_KEY_PREFIX = 'coders:promise:';
+
+    const client = createClient({ url: REDIS_URL });
+    await client.connect();
+
+    try {
+      const keys = await client.keys(`${PROMISE_KEY_PREFIX}*`);
+
+      if (keys.length === 0) {
+        log(`\n📋 No completion promises found.`, 'yellow');
+        log(`   Sessions will publish promises when they complete their tasks.`, 'blue');
+        await client.quit();
+        return;
+      }
+
+      log(`\n📋 Completion Promises (${keys.length}):\n`, 'blue');
+
+      for (const key of keys) {
+        const data = await client.get(key);
+        if (data) {
+          const promise = JSON.parse(data);
+          const sessionId = key.replace(PROMISE_KEY_PREFIX, '').replace('coder-', '');
+          const statusEmoji = promise.status === 'blocked' ? '🚫' :
+                            promise.status === 'needs-review' ? '👀' : '✅';
+          const timeAgo = getTimeAgo(promise.timestamp);
+
+          log(`${statusEmoji} ${sessionId}`, 'green');
+          log(`   ${promise.summary}`, 'reset');
+          log(`   Status: ${promise.status} • ${timeAgo}`, 'blue');
+          if (promise.blockers && promise.blockers.length > 0) {
+            log(`   Blockers: ${promise.blockers.join(', ')}`, 'yellow');
+          }
+          if (promise.filesChanged && promise.filesChanged.length > 0) {
+            log(`   Files: ${promise.filesChanged.slice(0, 3).join(', ')}${promise.filesChanged.length > 3 ? '...' : ''}`, 'blue');
+          }
+          log('');
+        }
+      }
+
+      await client.quit();
+    } catch (err) {
+      log(`❌ Failed to fetch promises: ${err.message}`, 'red');
+      await client.quit();
+    }
+  })().catch((err) => {
+    log(`❌ Failed to check promises: ${err.message}`, 'red');
   });
 } else if (command === 'resume') {
   const sessionName = args[1];
