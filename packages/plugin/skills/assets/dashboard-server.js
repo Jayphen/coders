@@ -167,6 +167,7 @@ function getFormattedSessionList() {
     // Get displayName from metadata cache
     const metadata = sessionMetadataCache.get(tmux.sessionId);
     const displayName = metadata?.displayName || null;
+    const task = metadata?.task || null;
 
     // Get promise (completion) data
     const promise = promisesCache.get(tmux.sessionId);
@@ -175,6 +176,7 @@ function getFormattedSessionList() {
     return {
       sessionId: tmux.sessionId,
       displayName: displayName,
+      task: task,
       windows: tmux.windows,
       status: status,
       hasHeartbeat: hasRecentHeartbeat,

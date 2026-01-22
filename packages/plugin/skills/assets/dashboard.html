@@ -158,6 +158,12 @@
       margin-bottom: 5px;
     }
 
+    .session-task {
+      color: #a7b0bb;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
     .typing-indicator {
       display: inline-flex;
       gap: 4px;
@@ -1073,6 +1079,10 @@
              </div>`
           : `<div class="session-name">${session.sessionId}${parentBadge}${childBadge}${childrenCount}</div>`;
 
+        const taskLine = session.task
+          ? `<div class="session-task" title="${escapeHtml(session.task)}">📝 ${escapeHtml(truncateText(session.task, 140))}</div>`
+          : '';
+
         return `
           <div class="session-card ${isStale ? 'stale' : ''} ${isUpdated ? 'pulse' : ''} ${hasChildren ? 'parent' : ''}" id="session-${session.sessionId.replace(/[^a-zA-Z0-9-]/g, '-')}">
             <div class="session-header">
@@ -1081,6 +1091,7 @@
             </div>
             <div class="session-info">
               ${parentLink}
+              ${taskLine}
               <div>
                 <span class="heartbeat-indicator ${heartbeatClass}" title="${heartbeatTitle}"></span>
                 Last seen: ${timeSince}
@@ -1171,6 +1182,21 @@
         return '.../' + parts.slice(-2).join('/');
       }
       return normalized.slice(-maxLen);
+    }
+
+    function truncateText(text, maxLen = 140) {
+      if (!text) return '';
+      return text.length > maxLen ? text.slice(0, maxLen - 1) + '…' : text;
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     const ansiUp = new AnsiUp();
