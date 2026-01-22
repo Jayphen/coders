@@ -1140,6 +1140,9 @@ if (command === 'help' || !command) {
   }
   updatePluginInSessions(pluginName);
 } else if (command === 'spawn') {
+  // Valid tool names
+  const VALID_TOOLS = ['claude', 'claude-code', 'gemini', 'codex', 'openai-codex', 'opencode', 'open-code'];
+
   // Default to 'claude' if no tool specified or if tool looks like a flag
   let tool = args[1];
   let argStartIndex = 2; // Default: args start after tool name
@@ -1147,6 +1150,21 @@ if (command === 'help' || !command) {
   if (!tool || tool.startsWith('--')) {
     tool = 'claude';
     argStartIndex = 1; // No tool specified, args start at index 1
+  }
+
+  // Validate tool name
+  if (!VALID_TOOLS.includes(tool)) {
+    log(`❌ Invalid tool: "${tool}"`, 'red');
+    log(`   Valid tools: ${VALID_TOOLS.filter(t => !t.includes('-')).join(', ')}`, 'yellow');
+    log(``, 'yellow');
+    log(`   Examples:`, 'blue');
+    log(`   • coders spawn claude --task "your task"`, 'blue');
+    log(`   • coders spawn gemini --task "your task"`, 'blue');
+    log(`   • coders spawn codex --task "your task"`, 'blue');
+    log(`   • coders spawn opencode --task "your task"`, 'blue');
+    log(``, 'yellow');
+    log(`   Tip: Use "claude" (not "sonnet") to spawn Claude Code`, 'yellow');
+    process.exit(1);
   }
 
   let sessionName = null; // Will be generated from task if not provided
