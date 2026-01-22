@@ -308,7 +308,7 @@
       gap: 10px;
     }
 
-    input[type="text"] {
+    .message-textarea {
       flex: 1;
       padding: 8px 12px;
       background: #0d1117;
@@ -316,11 +316,22 @@
       border-radius: 6px;
       color: #c9d1d9;
       font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 38px;
+      max-height: 200px;
+      line-height: 1.4;
     }
 
-    input[type="text"]:focus {
+    .message-textarea:focus {
       outline: none;
       border-color: #58a6ff;
+    }
+
+    .send-message-hint {
+      font-size: 11px;
+      color: #6e7681;
+      margin-top: 4px;
     }
 
     .empty-state {
@@ -802,9 +813,10 @@
       </div>
       <div class="output-content" id="output-content"></div>
       <div class="send-message">
-        <input type="text" id="message-input" placeholder="Type a message to send to this session..." />
+        <textarea class="message-textarea" id="message-input" placeholder="Type a message to send to this session..." rows="1"></textarea>
         <button onclick="sendMessage()">Send</button>
       </div>
+      <div class="send-message-hint">Press Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux) to send</div>
       <div class="special-keys-section">
         <div class="special-keys-header">
           <span class="special-keys-title">Special Keys</span>
@@ -1013,8 +1025,7 @@
       const sessionMap = new Map(regularSessions.map(s => [s.sessionId, s]));
 
       // Identify root sessions (no parent or parent not in active sessions)
-      // Sessions are sorted alphabetically by sessionId (older sessions first, newer last)
-      // This puts newest sessions at the bottom of the page
+      // Sessions are sorted by creation time (oldest first, newest at the bottom)
       const rootSessions = regularSessions.filter(s =>
         !s.parentSessionId || !sessionMap.has(s.parentSessionId)
       );
@@ -1318,10 +1329,14 @@
       }
     }
 
-    // Handle Enter key in message inputs
+    // Handle keyboard shortcuts in message inputs
     document.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('message-input')?.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') sendMessage();
+      document.getElementById('message-input')?.addEventListener('keydown', (e) => {
+        // Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux) to send
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          sendMessage();
+        }
       });
 
       document.getElementById('orchestrator-input')?.addEventListener('keypress', (e) => {

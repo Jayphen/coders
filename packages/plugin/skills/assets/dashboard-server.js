@@ -188,6 +188,7 @@ function getFormattedSessionList() {
       isOrchestrator: isOrchestrator,
       cwd: getSessionCwd(tmux.sessionId),
       parentSessionId: heartbeat?.parentSessionId || null,
+      createdAt: heartbeat?.createdAt || null,
       // Promise data
       promise: promise || null,
       hasPromise: hasPromise
@@ -210,7 +211,7 @@ function getFormattedSessionList() {
     session.children = childrenMap.get(session.sessionId) || [];
   });
 
-  // Sort sessions: orchestrator first, then root sessions (no parent), then by sessionId
+  // Sort sessions: orchestrator first, then root sessions (no parent), then by creation time (oldest first)
   return sessionList.sort((a, b) => {
     if (a.isOrchestrator) return -1;
     if (b.isOrchestrator) return 1;
@@ -219,6 +220,11 @@ function getFormattedSessionList() {
     const bIsRoot = !b.parentSessionId;
     if (aIsRoot && !bIsRoot) return -1;
     if (!aIsRoot && bIsRoot) return 1;
+    // Sort by creation time (oldest first, so newest at the bottom)
+    // Fall back to sessionId comparison if no createdAt timestamp
+    const aTime = a.createdAt || 0;
+    const bTime = b.createdAt || 0;
+    if (aTime !== bTime) return aTime - bTime;
     return a.sessionId.localeCompare(b.sessionId);
   });
 }
@@ -281,9 +287,11 @@ async function subscribeToHeartbeats() {
   await redisSubscriber.subscribe(HEARTBEAT_CHANNEL, (message) => {
     try {
       const data = JSON.parse(message);
+      const existing = sessions.get(data.paneId);
       sessions.set(data.paneId, {
         ...data,
-        lastSeen: Date.now()
+        lastSeen: Date.now(),
+        createdAt: existing?.createdAt || Date.now()
       });
       // Broadcast update immediately
       broadcast('sessions', getFormattedSessionList());
@@ -366,9 +374,11 @@ async function loadInitialState() {
         if (value) {
           const data = JSON.parse(value);
           // usage of data.timestamp for lastSeen is an approximation
+          const existing = sessions.get(data.paneId);
           sessions.set(data.paneId, {
             ...data,
-            lastSeen: Date.now()
+            lastSeen: Date.now(),
+            createdAt: existing?.createdAt || data.timestamp || Date.now()
           });
         }
       } catch (e) {
