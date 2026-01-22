@@ -383,11 +383,27 @@ function attachSession(sessionName) {
 
 function killSession(sessionName) {
   const fullName = `${TMUX_SESSION_PREFIX}${sessionName}`;
+  const tmuxSocket = resolveTmuxSocketFromEnv();
 
   // Kill associated heartbeat process first
   try {
     execSync(`pkill -f "heartbeat.js.*${fullName}"`);
   } catch {} // May not exist
+
+  // Kill process tree for the tmux session to avoid orphaned CLI processes
+  try {
+    const panePids = listTmuxPanePids(fullName, tmuxSocket);
+    if (panePids.length > 0) {
+      const { children } = getProcessTable();
+      const tree = collectDescendants(panePids, children);
+      killPidList([...tree], 'TERM');
+      sleepMs(300);
+      const remaining = filterExistingPids(tree);
+      if (remaining.length > 0) {
+        killPidList(remaining, 'KILL');
+      }
+    }
+  } catch {}
 
   try {
     execSync(`tmux kill-session -t ${fullName}`);
@@ -395,6 +411,214 @@ function killSession(sessionName) {
   } catch (e) {
     log(`❌ Failed: ${e.message}`, 'red');
   }
+}
+
+function listTmuxPanePids(sessionName = null, tmuxSocket = null) {
+  try {
+    const socketArg = tmuxSocket ? `-S "${tmuxSocket}"` : '';
+    const target = sessionName ? `-t "${sessionName}"` : '-a';
+    const output = execSync(`tmux ${socketArg} list-panes ${target} -F "#{pane_pid}" 2>/dev/null`, {
+      encoding: 'utf8'
+    });
+    return output
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => Number(s))
+      .filter((n) => !Number.isNaN(n));
+  } catch {
+    return [];
+  }
+}
+
+function getProcessTable() {
+  const output = execSync('ps -axo pid=,ppid=,command=', { encoding: 'utf8' });
+  const children = new Map();
+  const commands = new Map();
+
+  output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const match = line.match(/^(\d+)\s+(\d+)\s+(.*)$/);
+      if (!match) return;
+      const pid = Number(match[1]);
+      const ppid = Number(match[2]);
+      const cmd = match[3];
+      commands.set(pid, cmd);
+      if (!children.has(ppid)) {
+        children.set(ppid, []);
+      }
+      children.get(ppid).push(pid);
+    });
+
+  return { children, commands };
+}
+
+function collectDescendants(rootPids, children) {
+  const visited = new Set();
+  const stack = [...rootPids];
+  while (stack.length > 0) {
+    const pid = stack.pop();
+    if (visited.has(pid)) continue;
+    visited.add(pid);
+    const kids = children.get(pid);
+    if (kids && kids.length > 0) {
+      kids.forEach((child) => stack.push(child));
+    }
+  }
+  return visited;
+}
+
+function killPidList(pids, signal = 'TERM') {
+  if (!pids || pids.length === 0) return;
+  const chunkSize = 100;
+  for (let i = 0; i < pids.length; i += chunkSize) {
+    const chunk = pids.slice(i, i + chunkSize);
+    try {
+      execSync(`kill -${signal} ${chunk.join(' ')}`);
+    } catch {}
+  }
+}
+
+function filterExistingPids(pids) {
+  if (!pids || pids.size === 0) return [];
+  const output = execSync('ps -axo pid=', { encoding: 'utf8' });
+  const live = new Set(
+    output
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((pid) => Number(pid))
+  );
+  const remaining = [];
+  for (const pid of pids) {
+    if (live.has(pid)) remaining.push(pid);
+  }
+  return remaining;
+}
+
+function sleepMs(ms) {
+  try {
+    const seconds = Math.max(ms / 1000, 0.001);
+    execSync(`sleep ${seconds}`);
+  } catch {}
+}
+
+function resolveTmuxSocketFromEnv() {
+  if (process.env.CODERS_TMUX_SOCKET) {
+    return process.env.CODERS_TMUX_SOCKET;
+  }
+  if (!process.env.TMUX) return null;
+  const raw = process.env.TMUX;
+  const commaIndex = raw.indexOf(',');
+  if (commaIndex === -1) return null;
+  return raw.slice(0, commaIndex);
+}
+
+function resolveTmuxSocketFromArgs(args) {
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--tmux-socket' && args[i + 1]) {
+      return args[i + 1];
+    }
+    if (arg.startsWith('--tmux-socket=')) {
+      return arg.split('=')[1] || null;
+    }
+  }
+  return null;
+}
+
+function isTmuxAvailable(tmuxSocket = null) {
+  try {
+    const socketArg = tmuxSocket ? `-S "${tmuxSocket}"` : '';
+    execSync(`tmux ${socketArg} list-sessions 2>/dev/null`, { encoding: 'utf8' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isTargetOrphan(cmd, includeClaude, includeHeartbeat) {
+  if (includeClaude && /\bclaude\b/.test(cmd)) return true;
+  if (includeHeartbeat && cmd.includes('heartbeat.js')) return true;
+  return false;
+}
+
+function pruneOrphaned(args) {
+  let dryRun = true;
+  let includeClaude = true;
+  let includeHeartbeat = true;
+  let allowEmptyTmux = false;
+
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--force' || arg === '--kill') {
+      dryRun = false;
+    } else if (arg === '--dry-run') {
+      dryRun = true;
+    } else if (arg === '--no-claude') {
+      includeClaude = false;
+    } else if (arg === '--no-heartbeat') {
+      includeHeartbeat = false;
+    } else if (arg === '--allow-empty-tmux') {
+      allowEmptyTmux = true;
+    }
+  }
+
+  const tmuxSocket = resolveTmuxSocketFromArgs(args) || resolveTmuxSocketFromEnv();
+  const tmuxAvailable = isTmuxAvailable(tmuxSocket);
+  const panePids = tmuxAvailable ? listTmuxPanePids(null, tmuxSocket) : [];
+
+  if (!tmuxAvailable) {
+    log('⚠️  tmux server not available for the current socket.', 'yellow');
+    if (!dryRun && !allowEmptyTmux) {
+      log('Refusing to terminate processes without tmux visibility.', 'yellow');
+      log('Tip: re-run with --tmux-socket <path> or --allow-empty-tmux if you are sure.', 'yellow');
+      return;
+    }
+  } else if (panePids.length === 0) {
+    log('⚠️  No tmux panes found for the current socket.', 'yellow');
+    if (!dryRun && !allowEmptyTmux) {
+      log('Refusing to terminate processes without tmux visibility.', 'yellow');
+      log('Tip: re-run with --tmux-socket <path> or --allow-empty-tmux if you are sure.', 'yellow');
+      return;
+    }
+  }
+
+  const { children, commands } = getProcessTable();
+  const inTmux = collectDescendants(panePids, children);
+  const orphans = [];
+
+  for (const [pid, cmd] of commands.entries()) {
+    if (!isTargetOrphan(cmd, includeClaude, includeHeartbeat)) continue;
+    if (!inTmux.has(pid)) {
+      orphans.push({ pid, cmd });
+    }
+  }
+
+  if (orphans.length === 0) {
+    log('✅ No orphaned processes found.', 'green');
+    return;
+  }
+
+  log(`⚠️  Found ${orphans.length} orphaned process(es):`, 'yellow');
+  orphans.forEach((p) => console.log(`${p.pid}\t${p.cmd}`));
+
+  if (dryRun) {
+    log(`Dry run only. Re-run with --force to terminate them.`, 'yellow');
+    return;
+  }
+
+  const orphanPids = orphans.map((p) => p.pid);
+  killPidList(orphanPids, 'TERM');
+  sleepMs(300);
+  const remaining = filterExistingPids(new Set(orphanPids));
+  if (remaining.length > 0) {
+    killPidList(remaining, 'KILL');
+  }
+  log(`✅ Terminated ${orphans.length} orphaned process(es).`, 'green');
 }
 
 /**
@@ -561,6 +785,7 @@ ${colors.green}Usage:${colors.reset}
   coders list
   coders attach <session>
   coders kill <session>
+  coders prune [--force] [--no-heartbeat] [--no-claude] [--tmux-socket <path>] [--allow-empty-tmux]
   coders promise "summary" [--status <status>] [--blockers "reason"]
   coders resume [session-name]
   coders dashboard
@@ -588,6 +813,14 @@ ${colors.green}Promise/Resume:${colors.reset}
     --blockers "reason"         Reason for being blocked
   coders resume [session-name]  - Resume a completed session (make active again)
 
+${colors.green}Cleanup:${colors.reset}
+  coders prune                 - List orphaned Claude/heartbeat processes
+    --force                    Terminate orphans (otherwise dry-run)
+    --no-heartbeat             Skip heartbeat.js processes
+    --no-claude                Skip claude processes
+    --tmux-socket <path>       Use a specific tmux socket
+    --allow-empty-tmux         Allow prune even if tmux panes are not visible
+
 ${colors.green}Plugin Update:${colors.reset}
   coders update-plugin   - Broadcast '/plugin update' to all active sessions
     --plugin <name>      Plugin name to update (default: coders)
@@ -613,6 +846,7 @@ ${colors.green}Examples:${colors.reset}
   coders list
   coders attach feature-auth
   coders kill feature-auth
+  coders prune --force
   coders dashboard
   coders restart-dashboard
   coders update-plugin
@@ -885,6 +1119,8 @@ if (command === 'help' || !command) {
   } else {
     killSession(sessionName);
   }
+} else if (command === 'prune') {
+  pruneOrphaned(args);
 } else if (command === 'dashboard') {
   launchDashboard().catch((err) => {
     log(`❌ Failed to launch dashboard: ${err.message}`, 'red');

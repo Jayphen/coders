@@ -218,6 +218,7 @@ export function attachSession(sessionName: string): void {
 
 export function killSession(sessionName: string): void {
   try {
+    killSessionProcessTree(sessionName);
     execSync(`tmux kill-session -t "${sessionName}" 2>/dev/null`);
     // Also try to clean up the promise from Redis
     try {
@@ -243,6 +244,7 @@ export async function killCompletedSessions(): Promise<{ killed: string[]; faile
 
   for (const session of completedSessions) {
     try {
+      killSessionProcessTree(session.name);
       execSync(`tmux kill-session -t "${session.name}" 2>/dev/null`);
       // Clean up promise from Redis
       try {
@@ -257,6 +259,115 @@ export async function killCompletedSessions(): Promise<{ killed: string[]; faile
   }
 
   return { killed, failed };
+}
+
+function killSessionProcessTree(sessionName: string): void {
+  try {
+    const panePids = listTmuxPanePids(sessionName);
+    if (panePids.length === 0) return;
+    const { children } = getProcessTable();
+    const tree = collectDescendants(panePids, children);
+    killPidList([...tree], 'TERM');
+    sleepMs(300);
+    const remaining = filterExistingPids(tree);
+    if (remaining.length > 0) {
+      killPidList(remaining, 'KILL');
+    }
+  } catch {
+    // Best effort only
+  }
+}
+
+function listTmuxPanePids(sessionName: string): number[] {
+  try {
+    const output = execSync(`tmux list-panes -t "${sessionName}" -F "#{pane_pid}" 2>/dev/null`, {
+      encoding: 'utf8'
+    });
+    return output
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => Number(s))
+      .filter((n) => !Number.isNaN(n));
+  } catch {
+    return [];
+  }
+}
+
+function getProcessTable(): { children: Map<number, number[]> } {
+  const output = execSync('ps -axo pid=,ppid=,command=', { encoding: 'utf8' });
+  const children = new Map<number, number[]>();
+
+  output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const match = line.match(/^(\d+)\s+(\d+)\s+(.*)$/);
+      if (!match) return;
+      const pid = Number(match[1]);
+      const ppid = Number(match[2]);
+      if (!children.has(ppid)) {
+        children.set(ppid, []);
+      }
+      children.get(ppid)!.push(pid);
+    });
+
+  return { children };
+}
+
+function collectDescendants(rootPids: number[], children: Map<number, number[]>): Set<number> {
+  const visited = new Set<number>();
+  const stack = [...rootPids];
+  while (stack.length > 0) {
+    const pid = stack.pop();
+    if (pid === undefined || visited.has(pid)) continue;
+    visited.add(pid);
+    const kids = children.get(pid);
+    if (kids && kids.length > 0) {
+      kids.forEach((child) => stack.push(child));
+    }
+  }
+  return visited;
+}
+
+function killPidList(pids: number[], signal: 'TERM' | 'KILL'): void {
+  if (pids.length === 0) return;
+  const chunkSize = 100;
+  for (let i = 0; i < pids.length; i += chunkSize) {
+    const chunk = pids.slice(i, i + chunkSize);
+    try {
+      execSync(`kill -${signal} ${chunk.join(' ')}`);
+    } catch {
+      // Ignore failures for individual chunks
+    }
+  }
+}
+
+function filterExistingPids(pids: Set<number>): number[] {
+  if (pids.size === 0) return [];
+  const output = execSync('ps -axo pid=', { encoding: 'utf8' });
+  const live = new Set(
+    output
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((pid) => Number(pid))
+  );
+  const remaining: number[] = [];
+  for (const pid of pids) {
+    if (live.has(pid)) remaining.push(pid);
+  }
+  return remaining;
+}
+
+function sleepMs(ms: number): void {
+  try {
+    const seconds = Math.max(ms / 1000, 0.001);
+    execSync(`sleep ${seconds}`);
+  } catch {
+    // No-op
+  }
 }
 
 /**

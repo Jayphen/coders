@@ -27,6 +27,7 @@ claude plugin install coders@coders
 /coders:list
 /coders:attach my-session
 /coders:kill my-session
+/coders:prune --force
 /coders:dashboard
 /coders:snapshot
 /coders:restore

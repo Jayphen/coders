@@ -29,6 +29,7 @@ No npm install needed - TypeScript files are loaded directly!
 /coders:list
 /coders:attach my-session
 /coders:kill my-session
+/coders:prune --force
 /coders:snapshot
 /coders:restore
 ```
