@@ -129,7 +129,7 @@ function readFileContent(filePath) {
 
 function generateInitialPrompt(tool, taskDescription, contextFiles = []) {
   let prompt = `TASK: ${taskDescription}\n\n`;
-  
+
   if (contextFiles.length > 0) {
     prompt += 'CONTEXT FILES:\n';
     contextFiles.forEach(file => {
@@ -140,8 +140,12 @@ function generateInitialPrompt(tool, taskDescription, contextFiles = []) {
     });
     prompt += '\n';
   }
-  
+
   prompt += '\nYou have full permissions. Complete the task.';
+  prompt += '\n\n⚠️  IMPORTANT: When you finish this task, you MUST publish a completion promise using:';
+  prompt += '\n/coders:promise "Brief summary of what you accomplished"';
+  prompt += '\n\nThis notifies the orchestrator and dashboard that your work is complete.';
+  prompt += '\nIf you get blocked, use: /coders:promise "Reason for being blocked" --status blocked';
   return prompt;
 }
 
