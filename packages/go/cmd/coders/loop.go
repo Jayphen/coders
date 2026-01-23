@@ -17,6 +17,7 @@ import (
 
 	"github.com/Jayphen/coders/internal/config"
 	"github.com/Jayphen/coders/internal/logging"
+	"github.com/Jayphen/coders/internal/notify"
 	"github.com/Jayphen/coders/internal/redis"
 	"github.com/Jayphen/coders/internal/tmux"
 	"github.com/Jayphen/coders/internal/types"
@@ -541,6 +542,10 @@ func notifyLoopComplete(loopID string, taskCount int, status string) error {
 		log.WithError(err).Debug("failed to send tmux display message (non-fatal)")
 		// Non-fatal - continue even if tmux notification fails
 	}
+
+	// Send OS-native notification
+	notificationTitle := fmt.Sprintf("Loop %s", status)
+	notify.Send(notificationTitle, notification.Message)
 
 	return nil
 }
