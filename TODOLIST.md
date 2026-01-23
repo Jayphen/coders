@@ -78,10 +78,10 @@ Migration of TUI + CLI from TypeScript/Node.js to Go for improved performance an
 ### Core Commands
 - [ ] `coders spawn` - Spawn new session
 - [x] `coders list` - List all sessions
-- [ ] `coders attach` - Attach to session
-- [ ] `coders kill` - Kill session
-- [ ] `coders promise` - Publish completion promise
-- [ ] `coders resume` - Resume completed session
+- [x] `coders attach` - Attach to session
+- [x] `coders kill` - Kill session
+- [x] `coders promise` - Publish completion promise
+- [x] `coders resume` - Resume completed session
 - [x] `coders tui` - Launch TUI
 - [x] `coders version` - Show version
 

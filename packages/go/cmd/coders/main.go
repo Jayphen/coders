@@ -25,13 +25,12 @@ running various AI coding tools like Claude, Gemini, Codex, and OpenCode.`,
 	rootCmd.AddCommand(
 		newTUICmd(),
 		newListCmd(),
+		newAttachCmd(),
+		newKillCmd(),
+		newPromiseCmd(),
+		newResumeCmd(),
 		newVersionCmd(),
-		// TODO: Add more commands
-		// newSpawnCmd(),
-		// newAttachCmd(),
-		// newKillCmd(),
-		// newPromiseCmd(),
-		// newResumeCmd(),
+		// TODO: newSpawnCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {
