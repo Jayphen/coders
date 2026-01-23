@@ -535,5 +535,12 @@ func notifyLoopComplete(loopID string, taskCount int, status string) error {
 		"status":    status,
 	}).Info("loop notification sent")
 
+	// Send tmux display-message notification to parent session
+	tmuxMessage := fmt.Sprintf("Loop %s %s: %d tasks", loopID, status, taskCount)
+	if err := tmux.SendDisplayMessage("", tmuxMessage); err != nil {
+		log.WithError(err).Debug("failed to send tmux display message (non-fatal)")
+		// Non-fatal - continue even if tmux notification fails
+	}
+
 	return nil
 }

@@ -310,3 +310,25 @@ func CapturePane(sessionName string, lines int) (string, error) {
 	}
 	return strings.TrimRight(string(out), "\n"), nil
 }
+
+// SendDisplayMessage sends a display-message notification to a tmux session.
+// If targetSession is empty, it will use the CODERS_SESSION_ID environment variable.
+func SendDisplayMessage(targetSession, message string) error {
+	// Use CODERS_SESSION_ID env var if no target specified
+	if targetSession == "" {
+		targetSession = os.Getenv("CODERS_SESSION_ID")
+	}
+
+	// No target session - nothing to do
+	if targetSession == "" {
+		return nil
+	}
+
+	// Check if target session exists
+	if !SessionExists(targetSession) {
+		return fmt.Errorf("target session does not exist: %s", targetSession)
+	}
+
+	// Send the display message
+	return exec.Command("tmux", "display-message", "-t", targetSession, message).Run()
+}
