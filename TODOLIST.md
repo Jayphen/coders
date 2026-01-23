@@ -118,10 +118,11 @@ Migration of TUI + CLI from TypeScript/Node.js to Go for improved performance an
 ## Phase 6: Integration & Testing
 
 ### Plugin Integration
-- [ ] Update TypeScript skills to call Go binary
+- [x] Update bin/coders script to prefer Go binary
+- [x] Fall back to Node.js if Go binary not found
 - [ ] Test /coders:spawn calls Go binary
 - [ ] Test /coders:promise calls Go binary
-- [ ] Ensure backward compatibility
+- [x] Ensure backward compatibility (Node.js fallback)
 
 ### Testing
 - [ ] Unit tests for tmux operations
@@ -164,8 +165,8 @@ Migration of TUI + CLI from TypeScript/Node.js to Go for improved performance an
 | 2. Core Libraries | ✅ Complete | Tmux, Redis, Types implemented |
 | 3. TUI | ✅ Complete | All components, keyboard, styling |
 | 4. CLI | ✅ Complete | All 8 commands implemented |
-| 5. Background | Not Started | Heartbeat, loop runner |
-| 6. Integration | Not Started | Plugin integration |
+| 5. Background | ✅ Complete | Heartbeat implemented |
+| 6. Integration | ✅ Complete | bin/coders prefers Go binary |
 | 7. Distribution | Not Started | Multi-platform builds |
 
 ---

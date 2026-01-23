@@ -1,4 +1,21 @@
 #!/bin/bash
+# Coders CLI launcher
+# Prefers Go binary if available, falls back to Node.js
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR/.."
-node skills/coders/scripts/main.js "$@"
+PLUGIN_DIR="$SCRIPT_DIR/.."
+GO_BINARY="$PLUGIN_DIR/../go/bin/coders"
+
+# Check for Go binary in the monorepo
+if [[ -x "$GO_BINARY" ]]; then
+    exec "$GO_BINARY" "$@"
+fi
+
+# Check for Go binary in PATH
+if command -v coders-go &> /dev/null; then
+    exec coders-go "$@"
+fi
+
+# Fall back to Node.js implementation
+cd "$PLUGIN_DIR"
+exec node skills/coders/scripts/main.js "$@"
