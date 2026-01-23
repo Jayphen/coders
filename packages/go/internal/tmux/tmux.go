@@ -297,9 +297,15 @@ func CreateSession(name, cwd, command string) error {
 	return exec.Command("tmux", args...).Run()
 }
 
-// SendKeys sends keys to a tmux session.
+// SendKeys sends keys to a tmux session and submits them with Enter.
+// Uses -l flag to send text literally, then sends Enter key to submit.
 func SendKeys(sessionName, keys string) error {
-	return exec.Command("tmux", "send-keys", "-t", sessionName, keys, "Enter").Run()
+	// Send the text literally (so special characters aren't interpreted)
+	if err := exec.Command("tmux", "send-keys", "-l", "-t", sessionName, keys).Run(); err != nil {
+		return err
+	}
+	// Send Enter key to submit
+	return exec.Command("tmux", "send-keys", "-t", sessionName, "Enter").Run()
 }
 
 // CapturePane returns the last N lines of output from a session's active pane.
