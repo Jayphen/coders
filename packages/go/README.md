@@ -144,3 +144,111 @@ The plugin calls the Go binary for operations, providing:
 - Instant command response (Go startup: ~2ms)
 - Single binary distribution
 - Shared state via Redis
+
+## Loop Runner
+
+The loop runner automatically processes tasks from a todolist file, spawning a fresh coder session for each task.
+
+### Basic Usage
+
+```bash
+# Create a todolist
+cat > tasks.txt << 'EOF'
+[ ] Add input validation to the API endpoints
+[ ] Write unit tests for the auth module
+[ ] Update README with API documentation
+EOF
+
+# Run the loop
+coders loop --todolist tasks.txt --cwd ~/project
+```
+
+The loop:
+1. Reads uncompleted tasks (`[ ]` format)
+2. Spawns a coder session for each task
+3. Waits for the session to publish a completion promise
+4. Marks the task complete (`[x]`) in the file
+5. Moves to the next task
+6. Auto-switches from Claude to Codex if usage limits are hit
+
+### Recursive Loops
+
+The `--wait` flag enables recursive task decomposition. A coder can spawn sub-loops and wait for them to complete:
+
+```bash
+# From within a coder session working on a complex task:
+coders loop --wait --todolist subtasks.txt --cwd .
+# Blocks until all subtasks complete
+# Then the parent coder continues its work
+```
+
+This creates task decomposition trees:
+
+```
+Orchestrator
+  └── Loop A (feature tasks)
+        ├── Coder A1 (simple task) → completes
+        ├── Coder A2 (complex task)
+        │     └── Loop A2 --wait (subtasks)
+        │           ├── Coder A2a → completes
+        │           └── Coder A2b → completes
+        │     # A2 continues after sub-loop completes
+        └── Coder A3 → completes
+```
+
+### Monitoring
+
+```bash
+# Check loop status
+coders loop-status
+coders loop-status --loop-id loop-1234567890
+
+# View log
+tail -f /tmp/coders-loop-loop-1234567890.log
+```
+
+## Coders Loops vs Ralph Loops
+
+[Ralph loops](https://ghuntley.com/ralph/) are a popular technique for iterative AI development using a bash while loop that repeatedly feeds Claude the same prompt until completion. Coders loops take a fundamentally different approach that's more powerful for complex work.
+
+### Key Differences
+
+| Aspect | Ralph Loop | Coders Loop |
+|--------|------------|-------------|
+| **Session model** | Single session, same prompt repeated | Fresh session per task |
+| **Context** | Accumulates over iterations, eventually hits limits | Clean context for each task |
+| **Task structure** | One monolithic prompt | Multiple discrete tasks from todolist |
+| **Parallelization** | Sequential only | Parallel support (planned) |
+| **Delegation** | Cannot spawn sub-agents | Recursive loops with `--wait` |
+| **Tool switching** | Manual | Auto-switches on rate limits |
+| **State** | Files only | Redis + files, survives crashes |
+| **Visibility** | None | TUI, dashboard, loop-status |
+| **Completion** | String matching in output | Explicit promise system |
+
+### When to Use Each
+
+**Ralph loops are good for:**
+- Single, well-defined tasks with clear completion criteria
+- Tasks where context accumulation helps (iterative refinement)
+- Simple "keep trying until it works" scenarios
+
+**Coders loops are better for:**
+- Multiple related tasks (feature implementation with tests, docs, etc.)
+- Complex work requiring task decomposition
+- Long-running work where context limits matter
+- Work requiring different tools for different subtasks
+- Team/orchestration scenarios with visibility needs
+- Work that might hit API rate limits
+
+### The Power of Recursive Decomposition
+
+The real power of coders loops comes from recursive decomposition. When a coder encounters a complex task, it can:
+
+1. Analyze the task and identify subtasks
+2. Write a subtask todolist
+3. Spawn a sub-loop with `--wait`
+4. Each subtask gets a fresh coder with full context
+5. Sub-loop completes, parent coder continues
+6. Parent coder integrates results and completes its own task
+
+This is impossible with Ralph loops, which are limited to a single session repeatedly executing the same prompt. Coders loops enable true hierarchical task decomposition with clean context boundaries at each level.
