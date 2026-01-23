@@ -9,81 +9,81 @@ Migration of TUI + CLI from TypeScript/Node.js to Go for improved performance an
 
 ## Phase 1: Project Setup & Foundation
 
-- [ ] Initialize Go module (`packages/go/`)
-- [ ] Set up project structure (cmd/, internal/, pkg/)
-- [ ] Add dependencies (bubbletea, bubbles, lipgloss, go-redis)
-- [ ] Create Makefile for building multi-platform binaries
+- [x] Initialize Go module (`packages/go/`)
+- [x] Set up project structure (cmd/, internal/, pkg/)
+- [x] Add dependencies (bubbletea, bubbles, lipgloss, go-redis)
+- [x] Create Makefile for building multi-platform binaries
 - [ ] Set up GitHub Actions for CI/CD
 
 ## Phase 2: Core Libraries
 
 ### Tmux Integration
-- [ ] Port tmux session listing (`tmux list-sessions`)
-- [ ] Port session attach/switch functionality
-- [ ] Port session kill (including process tree cleanup)
-- [ ] Port pane PID listing for heartbeat
+- [x] Port tmux session listing (`tmux list-sessions`)
+- [x] Port session attach/switch functionality
+- [x] Port session kill (including process tree cleanup)
+- [x] Port pane PID listing for heartbeat
 - [ ] Add tests for tmux operations
 
 ### Redis Integration
-- [ ] Set up go-redis client connection
-- [ ] Port Redis SCAN for keys (promises, heartbeats)
-- [ ] Port MGET for batch value retrieval
-- [ ] Port promise read/write operations
-- [ ] Port heartbeat read operations
+- [x] Set up go-redis client connection
+- [x] Port Redis SCAN for keys (promises, heartbeats)
+- [x] Port MGET for batch value retrieval
+- [x] Port promise read/write operations
+- [x] Port heartbeat read operations
 - [ ] Add tests for Redis operations
 
 ### Types & Models
-- [ ] Define Session struct
-- [ ] Define HeartbeatData struct
-- [ ] Define CoderPromise struct
-- [ ] Define usage statistics types
+- [x] Define Session struct
+- [x] Define HeartbeatData struct
+- [x] Define CoderPromise struct
+- [x] Define usage statistics types
 
 ## Phase 3: TUI Implementation
 
 ### Core Application
-- [ ] Create main Bubbletea model
-- [ ] Implement Init() with session fetch + ticker
-- [ ] Implement Update() for keyboard handling
-- [ ] Implement View() for rendering
-- [ ] Add 5-second auto-refresh polling
+- [x] Create main Bubbletea model
+- [x] Implement Init() with session fetch + ticker
+- [x] Implement Update() for keyboard handling
+- [x] Implement View() for rendering
+- [x] Add 5-second auto-refresh polling
 
 ### Components
-- [ ] Header component (title + version)
-- [ ] SessionList component (active/completed sections)
-- [ ] SessionRow component (tool colors, status indicators)
-- [ ] SessionDetail component (full session info panel)
-- [ ] StatusBar component (help text, counts)
-- [ ] Spawn dialog (text input modal)
-- [ ] Kill confirmation dialog
+- [x] Header component (title + version)
+- [x] SessionList component (active/completed sections)
+- [x] SessionRow component (tool colors, status indicators)
+- [x] SessionDetail component (full session info panel)
+- [x] StatusBar component (help text, counts)
+- [x] Spawn dialog (text input modal)
+- [x] Kill confirmation dialog
 
 ### Styling (Lip Gloss)
-- [ ] Define color palette (tool colors, status colors)
-- [ ] Style borders and boxes
-- [ ] Style selected/dimmed states
-- [ ] Progress bar rendering
-- [ ] Status indicators (●, ◐, ○, ✓, !, ?)
+- [x] Define color palette (tool colors, status colors)
+- [x] Style borders and boxes
+- [x] Style selected/dimmed states
+- [x] Progress bar rendering
+- [x] Status indicators (●, ◐, ○, ✓, !, ?)
 
 ### Keyboard Handling
-- [ ] Arrow keys + j/k navigation
-- [ ] Enter/a to attach
-- [ ] s to spawn
-- [ ] K to kill selected
-- [ ] C to kill all completed
-- [ ] R to resume
-- [ ] r to refresh
-- [ ] q to quit
+- [x] Arrow keys + j/k navigation
+- [x] Enter/a to attach
+- [x] s to spawn
+- [x] K to kill selected
+- [x] C to kill all completed
+- [x] R to resume
+- [x] r to refresh
+- [x] q to quit
 
 ## Phase 4: CLI Commands
 
 ### Core Commands
 - [ ] `coders spawn` - Spawn new session
-- [ ] `coders list` - List all sessions
+- [x] `coders list` - List all sessions
 - [ ] `coders attach` - Attach to session
 - [ ] `coders kill` - Kill session
 - [ ] `coders promise` - Publish completion promise
 - [ ] `coders resume` - Resume completed session
-- [ ] `coders tui` - Launch TUI
-- [ ] `coders version` - Show version
+- [x] `coders tui` - Launch TUI
+- [x] `coders version` - Show version
 
 ### Spawn Features
 - [ ] Tool selection (claude, gemini, codex, opencode)
@@ -158,10 +158,10 @@ Migration of TUI + CLI from TypeScript/Node.js to Go for improved performance an
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| 1. Setup | Not Started | |
-| 2. Core Libraries | Not Started | |
-| 3. TUI | Not Started | |
-| 4. CLI | Not Started | |
+| 1. Setup | ✅ Complete | Module, deps, Makefile done |
+| 2. Core Libraries | ✅ Complete | Tmux, Redis, Types implemented |
+| 3. TUI | ✅ Complete | All components, keyboard, styling |
+| 4. CLI | 🚧 In Progress | list, tui, version done; spawn, attach, kill, promise remaining |
 | 5. Background | Not Started | |
 | 6. Integration | Not Started | |
 | 7. Distribution | Not Started | |
