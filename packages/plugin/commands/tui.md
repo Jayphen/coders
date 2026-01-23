@@ -6,11 +6,7 @@ description: Open the terminal UI for managing coder sessions
 
 Execute:
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js tui
-```
-CLI alternative:
-```bash
-./bin/coders tui
+${CLAUDE_PLUGIN_ROOT}/bin/coders tui
 ```
 
 Opens the terminal UI for managing coder sessions. The TUI runs in its own tmux session (`coders-tui`) so you can easily switch between it and your coding sessions.

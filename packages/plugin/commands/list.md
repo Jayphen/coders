@@ -6,11 +6,7 @@ description: List all active coder sessions
 
 Execute:
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js list
-```
-CLI alternative:
-```bash
-./bin/coders list
+${CLAUDE_PLUGIN_ROOT}/bin/coders list
 ```
 
 Show all tmux sessions spawned by the coders plugin.

@@ -6,11 +6,7 @@ description: Open the Coders dashboard (start server if needed)
 
 Execute:
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js dashboard
-```
-CLI alternative:
-```bash
-./bin/coders dashboard
+${CLAUDE_PLUGIN_ROOT}/bin/coders dashboard
 ```
 
 Starts the dashboard server if it is not already running and opens it in your browser.

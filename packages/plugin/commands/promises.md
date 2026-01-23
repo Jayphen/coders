@@ -6,7 +6,7 @@ description: Check completion promises from all coder sessions
 
 Execute:
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js promises
+${CLAUDE_PLUGIN_ROOT}/bin/coders promises
 ```
 
 Check the completion status of all spawned coder sessions. Shows which sessions have finished their tasks, are blocked, or need review.

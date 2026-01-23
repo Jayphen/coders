@@ -6,7 +6,7 @@ description: Start a recursive loop that auto-spawns sessions based on a todolis
 
 Execute:
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js loop $ARGUMENTS
+${CLAUDE_PLUGIN_ROOT}/bin/coders loop $ARGUMENTS
 ```
 
 Start a recursive workflow loop that automatically spawns coder sessions to complete tasks from a todolist file. Each session publishes a promise when complete, triggering the next task.
