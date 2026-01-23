@@ -30,6 +30,7 @@ var (
 	loopMaxConcurrent int
 	loopStopOnBlocked bool
 	loopBackground    bool
+	loopWait          bool
 	loopID            string
 )
 
@@ -70,12 +71,17 @@ Features:
   - Auto-switches from Claude to Codex if usage limit warnings are detected
   - Saves state to Redis for recovery
   - Can stop on blocked tasks or continue
-  - Runs in background by default
+  - Runs in background by default (use --wait for blocking mode)
+  - Supports recursive loops (coder can spawn sub-loops with --wait)
 
 Examples:
   coders loop --todolist tasks.txt --cwd ~/project
   coders loop --todolist todo.md --cwd ~/app --tool gemini
-  coders loop --todolist tasks.txt --cwd . --stop-on-blocked --foreground`,
+  coders loop --todolist tasks.txt --cwd . --stop-on-blocked --wait
+
+Recursive loops (from within a coder session):
+  coders loop --wait --todolist subtasks.txt --cwd .
+  # Blocks until all subtasks complete, then coder continues`,
 		RunE: runLoop,
 	}
 
@@ -86,6 +92,7 @@ Examples:
 	cmd.Flags().IntVar(&loopMaxConcurrent, "max-concurrent", 1, "Maximum concurrent sessions (not yet implemented)")
 	cmd.Flags().BoolVar(&loopStopOnBlocked, "stop-on-blocked", false, "Stop loop if a task is blocked")
 	cmd.Flags().BoolVar(&loopBackground, "background", true, "Run in background")
+	cmd.Flags().BoolVarP(&loopWait, "wait", "w", false, "Wait for loop to complete (blocks until done, enables recursive loops)")
 	cmd.Flags().StringVar(&loopID, "loop-id", "", "Custom loop ID (auto-generated if not set)")
 
 	cmd.MarkFlagRequired("todolist")
@@ -123,7 +130,13 @@ func runLoop(cmd *cobra.Command, args []string) error {
 		"cwd":      cwdPath,
 		"tool":     loopTool,
 		"loopId":   loopID,
+		"wait":     loopWait,
 	}).Info("starting loop")
+
+	// --wait flag overrides --background (enables recursive loops from within coders)
+	if loopWait {
+		loopBackground = false
+	}
 
 	// If background mode, spawn ourselves as a background process
 	if loopBackground {
