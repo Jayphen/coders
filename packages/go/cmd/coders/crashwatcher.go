@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Jayphen/coders/internal/config"
+	"github.com/Jayphen/coders/internal/logging"
 	"github.com/Jayphen/coders/internal/redis"
 	"github.com/Jayphen/coders/internal/tmux"
 	"github.com/Jayphen/coders/internal/types"
@@ -41,17 +42,23 @@ This is typically started automatically by 'coders spawn' when --restart-on-cras
 }
 
 func runCrashWatcher(cmd *cobra.Command, args []string) error {
+	log := logging.WithCommand("crash-watcher")
+
 	sessionID := crashWatcherSessionID
 	if sessionID == "" {
 		sessionID = os.Getenv("CODERS_SESSION_ID")
 	}
 	if sessionID == "" {
+		log.Error("session ID required")
 		return fmt.Errorf("session ID required (use --session or CODERS_SESSION_ID env)")
 	}
+
+	log = log.WithSessionID(sessionID)
 
 	// Connect to Redis
 	redisClient, err := redis.NewClient()
 	if err != nil {
+		log.WithError(err).Error("failed to connect to Redis")
 		return fmt.Errorf("failed to connect to Redis: %w", err)
 	}
 	defer redisClient.Close()
@@ -60,12 +67,18 @@ func runCrashWatcher(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	state, err := redisClient.GetSessionState(ctx, sessionID)
 	if err != nil {
+		log.WithError(err).Error("failed to get session state")
 		return fmt.Errorf("failed to get session state: %w", err)
 	}
 	if state == nil {
+		log.Error("no session state found")
 		return fmt.Errorf("no session state found for %s", sessionID)
 	}
 
+	log.WithFields(map[string]interface{}{
+		"max_restarts":     state.MaxRestarts,
+		"current_restarts": state.RestartCount,
+	}).Info("crash watcher started")
 	fmt.Printf("[CrashWatcher] Started for session: %s\n", sessionID)
 	fmt.Printf("[CrashWatcher] Max restarts: %d, Current restarts: %d\n", state.MaxRestarts, state.RestartCount)
 
@@ -88,10 +101,16 @@ func runCrashWatcher(cmd *cobra.Command, args []string) error {
 			crashed, reason := checkSessionCrashed(sessionID)
 			if crashed {
 				consecutiveFailures++
+				log.WithFields(map[string]interface{}{
+					"consecutive_failures": consecutiveFailures,
+					"threshold":            failureThreshold,
+					"reason":               reason,
+				}).Warn("session appears crashed")
 				fmt.Printf("[CrashWatcher] Session appears crashed (check %d/%d): %s\n",
 					consecutiveFailures, failureThreshold, reason)
 
 				if consecutiveFailures >= failureThreshold {
+					log.WithField("reason", reason).Error("session confirmed crashed")
 					fmt.Printf("[CrashWatcher] Session confirmed crashed: %s\n", reason)
 
 					// Record crash event
@@ -107,23 +126,31 @@ func runCrashWatcher(cmd *cobra.Command, args []string) error {
 
 					// Check if we can restart
 					if state.RestartCount >= state.MaxRestarts {
+						log.WithField("max_restarts", state.MaxRestarts).Warn("max restarts reached, not restarting")
 						fmt.Printf("[CrashWatcher] Max restarts (%d) reached, not restarting\n", state.MaxRestarts)
 						// Clean up session state
 						if err := redisClient.DeleteSessionState(ctx, sessionID); err != nil {
+							log.WithError(err).Warn("failed to delete session state")
 							fmt.Printf("[CrashWatcher] Failed to delete session state: %v\n", err)
 						}
 						return nil
 					}
 
 					// Attempt restart
+					log.WithFields(map[string]interface{}{
+						"restart_attempt": state.RestartCount + 1,
+						"max_restarts":    state.MaxRestarts,
+					}).Info("attempting restart")
 					fmt.Printf("[CrashWatcher] Attempting restart %d/%d...\n",
 						state.RestartCount+1, state.MaxRestarts)
 
 					if err := restartSession(redisClient, state); err != nil {
+						log.WithError(err).Error("failed to restart session")
 						fmt.Printf("[CrashWatcher] Failed to restart session: %v\n", err)
 						return err
 					}
 
+					log.Info("session restarted successfully")
 					fmt.Printf("[CrashWatcher] Session restarted successfully\n")
 					consecutiveFailures = 0
 

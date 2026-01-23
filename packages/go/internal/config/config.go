@@ -34,6 +34,36 @@ type Config struct {
 
 	// Ollama configuration
 	Ollama OllamaConfig `yaml:"ollama"`
+
+	// Logging configuration
+	Logging LoggingConfig `yaml:"logging"`
+}
+
+// LoggingConfig holds logging-specific configuration.
+type LoggingConfig struct {
+	// Level is the minimum log level (debug, info, warn, error)
+	Level string `yaml:"level"`
+
+	// FilePath is the path to the log file (empty for console only)
+	FilePath string `yaml:"file_path"`
+
+	// JSON enables JSON output format
+	JSON bool `yaml:"json"`
+
+	// Console enables console output in addition to file output
+	Console bool `yaml:"console"`
+
+	// MaxSize is the maximum size in megabytes before rotation
+	MaxSize int `yaml:"max_size"`
+
+	// MaxBackups is the maximum number of old log files to retain
+	MaxBackups int `yaml:"max_backups"`
+
+	// MaxAge is the maximum number of days to retain old log files
+	MaxAge int `yaml:"max_age"`
+
+	// Compress enables gzip compression of rotated files
+	Compress bool `yaml:"compress"`
 }
 
 // OllamaConfig holds Ollama-specific configuration.
@@ -56,6 +86,12 @@ const (
 	DefaultDashboardPort      = 3000
 	DefaultDefaultModel       = ""
 	DefaultDefaultHeartbeat   = true
+	DefaultLogLevel           = "info"
+	DefaultLogJSON            = true
+	DefaultLogMaxSize         = 10   // 10 MB
+	DefaultLogMaxBackups      = 5
+	DefaultLogMaxAge          = 7    // 7 days
+	DefaultLogCompress        = true
 )
 
 var (
@@ -96,6 +132,14 @@ func Load() (*Config, error) {
 		DashboardPort:     DefaultDashboardPort,
 		DefaultModel:      DefaultDefaultModel,
 		DefaultHeartbeat:  DefaultDefaultHeartbeat,
+		Logging: LoggingConfig{
+			Level:      DefaultLogLevel,
+			JSON:       DefaultLogJSON,
+			MaxSize:    DefaultLogMaxSize,
+			MaxBackups: DefaultLogMaxBackups,
+			MaxAge:     DefaultLogMaxAge,
+			Compress:   DefaultLogCompress,
+		},
 	}
 
 	// Try to load from config files (lowest priority file first)
@@ -177,6 +221,38 @@ func (c *Config) applyEnvOverrides() {
 	if val := os.Getenv("CODERS_OLLAMA_API_KEY"); val != "" {
 		c.Ollama.APIKey = val
 	}
+
+	// Logging settings
+	if val := os.Getenv("CODERS_LOG_LEVEL"); val != "" {
+		c.Logging.Level = val
+	}
+	if val := os.Getenv("CODERS_LOG_FILE"); val != "" {
+		c.Logging.FilePath = val
+	}
+	if val := os.Getenv("CODERS_LOG_JSON"); val != "" {
+		c.Logging.JSON = val == "true" || val == "1" || val == "yes"
+	}
+	if val := os.Getenv("CODERS_LOG_CONSOLE"); val != "" {
+		c.Logging.Console = val == "true" || val == "1" || val == "yes"
+	}
+	if val := os.Getenv("CODERS_LOG_MAX_SIZE"); val != "" {
+		if size, err := strconv.Atoi(val); err == nil {
+			c.Logging.MaxSize = size
+		}
+	}
+	if val := os.Getenv("CODERS_LOG_MAX_BACKUPS"); val != "" {
+		if backups, err := strconv.Atoi(val); err == nil {
+			c.Logging.MaxBackups = backups
+		}
+	}
+	if val := os.Getenv("CODERS_LOG_MAX_AGE"); val != "" {
+		if age, err := strconv.Atoi(val); err == nil {
+			c.Logging.MaxAge = age
+		}
+	}
+	if val := os.Getenv("CODERS_LOG_COMPRESS"); val != "" {
+		c.Logging.Compress = val == "true" || val == "1" || val == "yes"
+	}
 }
 
 // Reload forces a reload of the configuration.
@@ -227,6 +303,25 @@ ollama:
   base_url: ""
   auth_token: ""
   api_key: ""
+
+# Logging configuration
+logging:
+  # Log level (debug, info, warn, error)
+  level: info
+  # Path to log file (leave empty for console only)
+  file_path: ""
+  # Enable JSON output format
+  json: true
+  # Enable console output in addition to file
+  console: false
+  # Maximum size in MB before rotation
+  max_size: 10
+  # Number of old log files to retain
+  max_backups: 5
+  # Days to retain old log files
+  max_age: 7
+  # Compress rotated files
+  compress: true
 `
 	// Ensure parent directory exists
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {

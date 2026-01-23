@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Jayphen/coders/internal/config"
+	"github.com/Jayphen/coders/internal/logging"
 	"github.com/Jayphen/coders/internal/tmux"
 )
 
@@ -76,17 +77,22 @@ Crash Recovery:
 }
 
 func runSpawn(cmd *cobra.Command, args []string) error {
+	log := logging.WithCommand("spawn")
+
 	// Get tool from arg or flag
 	tool := spawnTool
 	if len(args) > 0 {
 		tool = args[0]
 	}
 
+	log.Debugf("starting spawn with tool=%s, task=%s", tool, spawnTask)
+
 	// Validate tool
 	validTools := map[string]bool{
 		"claude": true, "gemini": true, "codex": true, "opencode": true,
 	}
 	if !validTools[tool] {
+		log.Errorf("invalid tool: %s", tool)
 		return fmt.Errorf("invalid tool '%s': must be claude, gemini, codex, or opencode", tool)
 	}
 
@@ -124,8 +130,12 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 	sessionName := generateSessionName(tool, spawnTask)
 	sessionID := tmux.SessionPrefix + sessionName
 
+	// Create logger with session context
+	log = log.WithSessionID(sessionID)
+
 	// Check if session already exists
 	if tmux.SessionExists(sessionID) {
+		log.Warn("session already exists")
 		return fmt.Errorf("session '%s' already exists", sessionID)
 	}
 
@@ -159,14 +169,23 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create tmux session
+	log.Info("creating tmux session")
 	fmt.Printf("Creating session: %s\n", sessionID)
 	tmuxArgs := []string{"new-session", "-d", "-s", sessionID, "-c", cwd, "sh", "-c", fullCmd}
 
 	createCmd := exec.Command("tmux", tmuxArgs...)
 	if err := createCmd.Run(); err != nil {
+		log.WithError(err).Error("failed to create tmux session")
 		return fmt.Errorf("failed to create tmux session: %w", err)
 	}
 
+	log.WithFields(map[string]interface{}{
+		"tool":    tool,
+		"task":    spawnTask,
+		"cwd":     cwd,
+		"model":   spawnModel,
+		"ollama":  spawnOllama,
+	}).Info("session created successfully")
 	fmt.Printf("\033[32m✅ Created session: %s\033[0m\n", sessionID)
 	fmt.Printf("   Tool: %s\n", tool)
 	if spawnTask != "" {

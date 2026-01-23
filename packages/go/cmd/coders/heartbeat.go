@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Jayphen/coders/internal/config"
+	"github.com/Jayphen/coders/internal/logging"
 	"github.com/Jayphen/coders/internal/redis"
 	"github.com/Jayphen/coders/internal/types"
 )
@@ -46,9 +47,12 @@ It publishes heartbeat data every 30 seconds including usage statistics.`,
 }
 
 func runHeartbeat(cmd *cobra.Command, args []string) error {
+	log := logging.WithCommand("heartbeat")
+
 	// Load config for heartbeat interval
 	cfg, err := config.Get()
 	if err != nil {
+		log.WithError(err).Error("failed to load config")
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 	heartbeatInterval := cfg.HeartbeatInterval
@@ -62,8 +66,12 @@ func runHeartbeat(cmd *cobra.Command, args []string) error {
 		sessionID = args[0]
 	}
 	if sessionID == "" {
+		log.Error("session ID required")
 		return fmt.Errorf("session ID required (use --session, CODERS_SESSION_ID env, or pass as argument)")
 	}
+
+	// Create logger with session context
+	log = log.WithSessionID(sessionID)
 
 	// Get other params from flags or env
 	paneID := heartbeatPaneID
@@ -87,10 +95,12 @@ func runHeartbeat(cmd *cobra.Command, args []string) error {
 	// Connect to Redis
 	redisClient, err := redis.NewClient()
 	if err != nil {
+		log.WithError(err).Error("failed to connect to Redis")
 		return fmt.Errorf("failed to connect to Redis: %w", err)
 	}
 	defer redisClient.Close()
 
+	log.WithField("interval", heartbeatInterval.String()).Info("heartbeat started")
 	fmt.Printf("[Heartbeat] Started for session: %s\n", sessionID)
 	fmt.Printf("[Heartbeat] Publishing every %v\n", heartbeatInterval)
 
@@ -103,20 +113,21 @@ func runHeartbeat(cmd *cobra.Command, args []string) error {
 	defer ticker.Stop()
 
 	// Publish immediately, then on interval
-	publishHeartbeat(redisClient, sessionID, paneID, task, parent)
+	publishHeartbeat(log, redisClient, sessionID, paneID, task, parent)
 
 	for {
 		select {
 		case <-ticker.C:
-			publishHeartbeat(redisClient, sessionID, paneID, task, parent)
+			publishHeartbeat(log, redisClient, sessionID, paneID, task, parent)
 		case sig := <-sigChan:
+			log.WithField("signal", sig.String()).Info("received shutdown signal")
 			fmt.Printf("\n[Heartbeat] Received %v, shutting down...\n", sig)
 			return nil
 		}
 	}
 }
 
-func publishHeartbeat(client *redis.Client, sessionID, paneID, task, parent string) {
+func publishHeartbeat(log *logging.Logger, client *redis.Client, sessionID, paneID, task, parent string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -134,10 +145,12 @@ func publishHeartbeat(client *redis.Client, sessionID, paneID, task, parent stri
 	}
 
 	if err := client.SetHeartbeat(ctx, hb); err != nil {
+		log.WithError(err).Warn("failed to publish heartbeat")
 		fmt.Printf("[Heartbeat] Failed to publish: %v\n", err)
 		return
 	}
 
+	log.Debug("heartbeat published")
 	fmt.Printf("[Heartbeat] Published at %s\n", time.Now().Format("15:04:05"))
 }
 
