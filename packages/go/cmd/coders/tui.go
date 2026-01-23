@@ -28,8 +28,9 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}
 
 	// We're inside tmux with a TTY - run the TUI directly
+	model := tui.NewModel(Version)
 	p := tea.NewProgram(
-		tui.NewModel(Version),
+		&model,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)

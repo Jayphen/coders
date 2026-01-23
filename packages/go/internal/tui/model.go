@@ -54,6 +54,34 @@ type Model struct {
 
 	// Dependencies
 	redisClient *redis.Client
+
+	// View caching - avoid re-rendering when state hasn't changed
+	cachedView     string
+	lastViewState  viewState
+	viewStateDirty bool
+}
+
+// viewState captures the state that affects View() rendering.
+// Changes to any of these fields should trigger a re-render.
+type viewState struct {
+	sessionCount   int
+	selectedIndex  int
+	preview        string
+	previewSession string
+	previewErr     string // error message text
+	previewLoading bool
+	previewFocus   bool
+	loading        bool
+	err            string // error message text
+	statusMessage  string
+	statusExpired  bool   // whether status message should be shown
+	confirmKill    bool
+	spawnMode      bool
+	spawnInput     string
+	spawning       bool
+	width, height  int
+	spinnerView    string // spinner appearance (only when loading)
+	previewInput   string // only when previewFocus
 }
 
 // Messages
@@ -117,7 +145,10 @@ func (m Model) Init() tea.Cmd {
 }
 
 // Update handles messages.
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Mark view as potentially dirty - View() will compare state to decide if re-render is needed
+	m.viewStateDirty = true
+
 	cmds := make([]tea.Cmd, 0, 3)
 
 	switch msg := msg.(type) {
@@ -145,7 +176,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.selectedIndex >= 0 && m.selectedIndex < len(m.sessions) {
 			if m.previewSession != m.sessions[m.selectedIndex].Name {
-				return m.startPreviewFetch()
+				previewCmd := m.startPreviewFetch()
+				return m, previewCmd
 			}
 		}
 		return m, nil
@@ -156,8 +188,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		var previewCmd tea.Cmd
-		m, previewCmd = m.startPreviewFetch()
+		previewCmd := m.startPreviewFetch()
 		return m, tea.Batch(m.fetchSessions, previewCmd, m.tick())
 
 	case statusClearMsg:
@@ -227,7 +258,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleKey handles keyboard input.
-func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle spawn mode input
 	if m.spawnMode {
 		switch msg.String() {
@@ -313,13 +344,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.selectedIndex > 0 {
 			m.selectedIndex--
 		}
-		return m.startPreviewFetch()
+		return m, m.startPreviewFetch()
 
 	case "down", "j":
 		if m.selectedIndex < len(m.sessions)-1 {
 			m.selectedIndex++
 		}
-		return m.startPreviewFetch()
+		return m, m.startPreviewFetch()
 
 	case "enter", "a":
 		if len(m.sessions) > 0 && m.selectedIndex < len(m.sessions) {
@@ -380,8 +411,55 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// currentViewState captures the current state that affects rendering.
+func (m Model) currentViewState() viewState {
+	vs := viewState{
+		sessionCount:   len(m.sessions),
+		selectedIndex:  m.selectedIndex,
+		preview:        m.preview,
+		previewSession: m.previewSession,
+		previewLoading: m.previewLoading,
+		previewFocus:   m.previewFocus,
+		loading:        m.loading,
+		statusMessage:  m.statusMessage,
+		statusExpired:  time.Now().After(m.statusExpiry),
+		confirmKill:    m.confirmKill,
+		spawnMode:      m.spawnMode,
+		spawning:       m.spawning,
+		width:          m.width,
+		height:         m.height,
+	}
+
+	if m.previewErr != nil {
+		vs.previewErr = m.previewErr.Error()
+	}
+	if m.err != nil {
+		vs.err = m.err.Error()
+	}
+	if m.loading {
+		vs.spinnerView = m.spinner.View()
+	}
+	if m.previewFocus {
+		vs.previewInput = m.previewInput.Value()
+	}
+	if m.spawnMode {
+		vs.spawnInput = m.spawnInput.Value()
+	}
+
+	return vs
+}
+
 // View renders the UI.
-func (m Model) View() string {
+func (m *Model) View() string {
+	// Check if we can use cached view
+	if !m.viewStateDirty && m.cachedView != "" {
+		currentState := m.currentViewState()
+		if currentState == m.lastViewState {
+			return m.cachedView
+		}
+	}
+
+	// State has changed, render the view
 	var b strings.Builder
 
 	// Header
@@ -437,7 +515,14 @@ func (m Model) View() string {
 	b.WriteString("\n")
 	b.WriteString(m.renderStatusBar())
 
-	return lipgloss.NewStyle().Padding(1).Render(b.String())
+	rendered := lipgloss.NewStyle().Padding(1).Render(b.String())
+
+	// Cache the rendered view and state
+	m.cachedView = rendered
+	m.lastViewState = m.currentViewState()
+	m.viewStateDirty = false
+
+	return rendered
 }
 
 // Helper methods
@@ -464,14 +549,14 @@ func (m Model) selectedSession() *types.Session {
 	return nil
 }
 
-func (m Model) startPreviewFetch() (Model, tea.Cmd) {
+func (m *Model) startPreviewFetch() tea.Cmd {
 	s := m.selectedSession()
 	if s == nil {
 		m.previewSession = ""
 		m.preview = ""
 		m.previewErr = nil
 		m.previewLoading = false
-		return m, nil
+		return nil
 	}
 	lines := m.previewLines
 	if lines <= 0 {
@@ -479,7 +564,7 @@ func (m Model) startPreviewFetch() (Model, tea.Cmd) {
 	}
 	m.previewLoading = true
 	m.previewSession = s.Name
-	return m, m.fetchPreview(s.Name, lines)
+	return m.fetchPreview(s.Name, lines)
 }
 
 // Commands
