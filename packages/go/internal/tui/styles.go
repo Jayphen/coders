@@ -1,7 +1,11 @@
 // Package tui implements the terminal user interface using Bubbletea.
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 // Color palette
 var (
@@ -139,14 +143,15 @@ func RenderProgressBar(percent float64, width int) string {
 	}
 	empty := width - filled
 
-	bar := ""
+	var bar strings.Builder
+	bar.Grow(width) // Pre-allocate buffer to avoid reallocations
 	for i := 0; i < filled; i++ {
-		bar += ProgressFilled
+		bar.WriteString(ProgressFilled)
 	}
 	for i := 0; i < empty; i++ {
-		bar += ProgressEmpty
+		bar.WriteString(ProgressEmpty)
 	}
-	return bar
+	return bar.String()
 }
 
 // Session row name styles (pre-cached for performance)
