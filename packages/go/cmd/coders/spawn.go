@@ -148,22 +148,29 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 		shell = "/bin/bash"
 	}
 
-	// Create prompt file for tools that need it
-	promptFile := ""
-	if spawnTask != "" && (tool == "claude" || tool == "codex" || tool == "opencode") {
-		promptFile = fmt.Sprintf("/tmp/coders-prompt-%d.txt", time.Now().UnixNano())
-		prompt := buildPrompt(tool, spawnTask)
-		if err := os.WriteFile(promptFile, []byte(prompt), 0644); err != nil {
-			return fmt.Errorf("failed to write prompt file: %w", err)
-		}
+	// Create prompt for tools that need it (but don't use stdin for codex)
+	var prompt string
+	sendPromptViaTmux := false
+	if spawnTask != "" && (tool == "claude" || tool == "opencode") {
+		prompt = buildPrompt(tool, spawnTask)
+	} else if spawnTask != "" && tool == "codex" {
+		// Codex requires TTY, so we'll send the prompt via tmux send-keys instead
+		prompt = buildPrompt(tool, spawnTask)
+		sendPromptViaTmux = true
 	}
 
 	// Build full tmux command
 	var fullCmd string
-	if promptFile != "" {
+	if prompt != "" && !sendPromptViaTmux {
+		// For tools that accept stdin (claude, opencode)
+		promptFile := fmt.Sprintf("/tmp/coders-prompt-%d.txt", time.Now().UnixNano())
+		if err := os.WriteFile(promptFile, []byte(prompt), 0644); err != nil {
+			return fmt.Errorf("failed to write prompt file: %w", err)
+		}
 		fullCmd = fmt.Sprintf("cd %s && %s < %s; exec %s",
 			shellEscape(cwd), toolCmd, promptFile, shell)
 	} else {
+		// For tools that don't need stdin or codex
 		fullCmd = fmt.Sprintf("cd %s && %s; exec %s",
 			shellEscape(cwd), toolCmd, shell)
 	}
@@ -180,11 +187,11 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 	}
 
 	log.WithFields(map[string]interface{}{
-		"tool":    tool,
-		"task":    spawnTask,
-		"cwd":     cwd,
-		"model":   spawnModel,
-		"ollama":  spawnOllama,
+		"tool":   tool,
+		"task":   spawnTask,
+		"cwd":    cwd,
+		"model":  spawnModel,
+		"ollama": spawnOllama,
 	}).Info("session created successfully")
 	fmt.Printf("\033[32m✅ Created session: %s\033[0m\n", sessionID)
 	fmt.Printf("   Tool: %s\n", tool)
@@ -195,10 +202,28 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 
 	// Wait for CLI to be ready
 	fmt.Printf("⏳ Waiting for %s to start...\n", tool)
-	if ready := waitForCLIReady(sessionID, tool, 30*time.Second); ready {
+	if ready := waitForCLIReady(sessionID, tool, 10*time.Second); ready {
 		fmt.Printf("\033[32m✅ %s is running\033[0m\n", tool)
 	} else {
 		fmt.Printf("\033[33m⚠️  Timeout waiting for %s (session created but process may still be starting)\033[0m\n", tool)
+	}
+
+	// Send prompt via tmux if needed (for codex)
+	if sendPromptViaTmux && prompt != "" {
+		// Wait a bit for CLI to be fully ready
+		time.Sleep(2 * time.Second)
+
+		// Send the prompt line by line
+		lines := strings.Split(prompt, "\n")
+		for _, line := range lines {
+			sendCmd := exec.Command("tmux", "send-keys", "-t", sessionID, "-l", line)
+			if err := sendCmd.Run(); err != nil {
+				log.WithError(err).Warn("failed to send prompt line")
+			}
+			// Send newline
+			exec.Command("tmux", "send-keys", "-t", sessionID, "Enter").Run()
+		}
+		fmt.Printf("\033[32m✅ Sent task prompt to session\033[0m\n")
 	}
 
 	// Start heartbeat if enabled
@@ -320,7 +345,7 @@ func buildToolCommand(tool, task, model, sessionID string, useOllama bool) strin
 			cmd = fmt.Sprintf("%s gemini --yolo%s", envVars, modelArg)
 		}
 	case "codex":
-		cmd = fmt.Sprintf("%s codex exec --dangerously-bypass-approvals-and-sandbox%s", envVars, modelArg)
+		cmd = fmt.Sprintf("%s codex --dangerously-bypass-approvals-and-sandbox%s", envVars, modelArg)
 	case "opencode":
 		cmd = fmt.Sprintf("%s opencode%s", envVars, modelArg)
 	}
@@ -387,6 +412,8 @@ func isZoxideAvailable() bool {
 
 // waitForCLIReady waits for the CLI process to start in the tmux session.
 func waitForCLIReady(sessionID, tool string, timeout time.Duration) bool {
+	log := logging.WithCommand("spawn").WithSessionID(sessionID)
+
 	processNames := map[string]string{
 		"claude":   "claude",
 		"gemini":   "gemini",
@@ -396,45 +423,86 @@ func waitForCLIReady(sessionID, tool string, timeout time.Duration) bool {
 	processName := processNames[tool]
 
 	start := time.Now()
+	iteration := 0
+
 	for time.Since(start) < timeout {
+		iteration++
+		iterStart := time.Now()
+
 		// Get pane PID
+		tmuxStart := time.Now()
 		out, err := exec.Command("tmux", "display-message", "-t", sessionID, "-p", "#{pane_pid}").Output()
+		tmuxDuration := time.Since(tmuxStart)
+
 		if err != nil {
-			time.Sleep(500 * time.Millisecond)
+			log.Debugf("iter %d: tmux error after %v: %v", iteration, tmuxDuration, err)
+			time.Sleep(100 * time.Millisecond) // Reduced from 500ms
 			continue
 		}
 
 		panePID := strings.TrimSpace(string(out))
 		if panePID == "" {
-			time.Sleep(500 * time.Millisecond)
+			log.Debugf("iter %d: empty pane PID after %v", iteration, tmuxDuration)
+			time.Sleep(100 * time.Millisecond) // Reduced from 500ms
 			continue
 		}
 
-		// Check for child processes
-		childOut, err := exec.Command("pgrep", "-P", panePID).Output()
+		// Check for child processes - combine pgrep and ps into a single ps call
+		// This is more efficient than running ps for each child separately
+		psStart := time.Now()
+
+		// Get all children and their command names in one shot
+		// Format: PID PPID COMM
+		psOut, err := exec.Command("ps", "-ax", "-o", "pid=,ppid=,comm=").Output()
 		if err != nil {
-			time.Sleep(500 * time.Millisecond)
+			log.Debugf("iter %d: ps error after %v (tmux: %v): %v",
+				iteration, time.Since(psStart), tmuxDuration, err)
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
-		children := strings.Split(strings.TrimSpace(string(childOut)), "\n")
-		for _, childPID := range children {
-			if childPID == "" {
+		// Find children of panePID
+		childCount := 0
+		found := false
+		for _, line := range strings.Split(string(psOut), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) < 3 {
 				continue
 			}
-			procOut, err := exec.Command("ps", "-p", childPID, "-o", "comm=").Output()
-			if err != nil {
+
+			ppid := fields[1]
+			if ppid != panePID {
 				continue
 			}
-			procName := strings.TrimSpace(string(procOut))
-			if strings.Contains(procName, processName) {
-				return true
+
+			childCount++
+			comm := strings.Join(fields[2:], " ")
+			if strings.Contains(comm, processName) {
+				found = true
+				break
 			}
 		}
 
-		time.Sleep(500 * time.Millisecond)
+		if found {
+			psDuration := time.Since(psStart)
+			iterDuration := time.Since(iterStart)
+			totalDuration := time.Since(start)
+
+			log.Infof("CLI ready after %d iterations, %v total (iter: %v, tmux: %v, ps: %v for %d children)",
+				iteration, totalDuration, iterDuration, tmuxDuration, psDuration, childCount)
+			return true
+		}
+
+		psDuration := time.Since(psStart)
+		iterDuration := time.Since(iterStart)
+		log.Debugf("iter %d: no match in %d children after %v (tmux: %v, ps: %v)",
+			iteration, childCount, iterDuration, tmuxDuration, psDuration)
+
+		time.Sleep(100 * time.Millisecond) // Reduced from 500ms
 	}
 
+	totalDuration := time.Since(start)
+	log.Warnf("CLI not ready after %d iterations, %v total (timeout)", iteration, totalDuration)
 	return false
 }
 
