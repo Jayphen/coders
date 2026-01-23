@@ -33,6 +33,10 @@ type Model struct {
 	previewFocus   bool
 	previewInput   textinput.Model
 
+	// Preview caching - avoid re-splitting on every render
+	previewSplitLines []string
+	previewSplitText  string
+
 	// UI state
 	loading       bool
 	err           error
@@ -63,6 +67,12 @@ type (
 		session string
 		output  string
 		err     error
+	}
+	redisDataMsg struct {
+		client       *redis.Client
+		promises     map[string]*types.CoderPromise
+		heartbeats   map[string]*types.HeartbeatData
+		healthChecks map[string]*types.HealthCheckResult
 	}
 )
 
@@ -107,7 +117,7 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
+	cmds := make([]tea.Cmd, 0, 3)
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -172,9 +182,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.previewErr = msg.err
 			m.preview = ""
+			m.previewSplitLines = nil
+			m.previewSplitText = ""
 		} else {
 			m.previewErr = nil
 			m.preview = msg.output
+			// Cache split lines to avoid re-splitting on every render
+			m.previewSplitLines = strings.Split(msg.output, "\n")
+			m.previewSplitText = msg.output
 		}
 		return m, nil
 
@@ -524,21 +539,42 @@ func (m Model) fetchSessions() tea.Msg {
 	}
 
 	// Sort: orchestrator first, then active, then completed, by creation time
+	// Optimize by pre-calculating sort keys to avoid repeated comparisons
+	type sortKey struct {
+		priority  int   // 0=orchestrator, 1=active, 2=completed
+		timestamp int64 // negative for reverse chronological (newer first)
+		index     int   // preserve stable sort for equal elements
+	}
+
+	keys := make([]sortKey, len(sessions))
+	for i := range sessions {
+		s := &sessions[i]
+		key := sortKey{index: i}
+
+		if s.IsOrchestrator {
+			key.priority = 0
+		} else if s.HasPromise {
+			key.priority = 2 // Completed (has promise)
+		} else {
+			key.priority = 1 // Active (no promise)
+		}
+
+		if s.CreatedAt != nil {
+			key.timestamp = -s.CreatedAt.Unix() // Negative for reverse order
+		}
+
+		keys[i] = key
+	}
+
 	sort.Slice(sessions, func(i, j int) bool {
-		a, b := sessions[i], sessions[j]
-		if a.IsOrchestrator {
-			return true
+		ki, kj := keys[i], keys[j]
+		if ki.priority != kj.priority {
+			return ki.priority < kj.priority
 		}
-		if b.IsOrchestrator {
-			return false
+		if ki.timestamp != kj.timestamp {
+			return ki.timestamp < kj.timestamp
 		}
-		if a.HasPromise != b.HasPromise {
-			return !a.HasPromise // Active before completed
-		}
-		if a.CreatedAt != nil && b.CreatedAt != nil {
-			return a.CreatedAt.After(*b.CreatedAt)
-		}
-		return false
+		return ki.index < kj.index
 	})
 
 	return sessionsMsg(sessions)
