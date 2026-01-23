@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
+import TextInput from 'ink-text-input';
 import { SessionList } from './components/SessionList.js';
 import { SessionDetail } from './components/SessionDetail.js';
 import { StatusBar } from './components/StatusBar.js';
 import { Header } from './components/Header.js';
 import type { Session } from './types.js';
-import { getTmuxSessions, attachSession, killSession, killCompletedSessions, resumeSession } from './tmux.js';
+import { getTmuxSessions, attachSession, killSession, killCompletedSessions, resumeSession, spawnSession } from './tmux.js';
 
 interface Props {
   version?: string;
@@ -69,6 +70,9 @@ export function App({ version }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [confirmKillCompleted, setConfirmKillCompleted] = useState(false);
+  const [spawnMode, setSpawnMode] = useState(false);
+  const [spawnArgs, setSpawnArgs] = useState('');
+  const [spawning, setSpawning] = useState(false);
   const sessionsRef = useRef<Session[]>([]);
 
   const refreshSessions = useCallback(async (showLoading = false) => {
@@ -107,7 +111,44 @@ export function App({ version }: Props) {
     }
   }, [statusMessage]);
 
-  useInput(useCallback((input: string, key: { upArrow?: boolean; downArrow?: boolean; return?: boolean }) => {
+  const handleSpawnSubmit = useCallback((value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setSpawnMode(false);
+      setSpawnArgs('');
+      setStatusMessage('Spawn cancelled');
+      return;
+    }
+
+    setSpawnMode(false);
+    setSpawnArgs('');
+    setSpawning(true);
+    setStatusMessage('Spawning session...');
+
+    spawnSession(trimmed)
+      .then((result) => {
+        if (result.ok) {
+          setStatusMessage('Spawn command sent');
+        } else {
+          setStatusMessage(`Spawn failed: ${result.message ?? 'unknown error'}`);
+        }
+        refreshSessions(false);
+      })
+      .finally(() => {
+        setSpawning(false);
+      });
+  }, [refreshSessions]);
+
+  useInput(useCallback((input: string, key: { upArrow?: boolean; downArrow?: boolean; return?: boolean; escape?: boolean }) => {
+    if (spawnMode) {
+      if (key.escape) {
+        setSpawnMode(false);
+        setSpawnArgs('');
+        setStatusMessage('Spawn cancelled');
+      }
+      return;
+    }
+
     // Handle confirmation dialog
     if (confirmKillCompleted) {
       if (input === 'y' || input === 'Y') {
@@ -123,6 +164,15 @@ export function App({ version }: Props) {
       } else if (input === 'n' || input === 'N' || key.return) {
         setConfirmKillCompleted(false);
         setStatusMessage('Cancelled');
+      }
+      return;
+    }
+
+    if (input === 's') {
+      if (spawning) {
+        setStatusMessage('Spawn already in progress');
+      } else {
+        setSpawnMode(true);
       }
       return;
     }
@@ -193,7 +243,7 @@ export function App({ version }: Props) {
       }
       return;
     }
-  }, [exit, refreshSessions, selectedIndex, confirmKillCompleted]));
+  }, [exit, refreshSessions, selectedIndex, confirmKillCompleted, spawnMode, spawning]));
 
   const selectedSession = sessions[selectedIndex] || null;
   const completedCount = sessions.filter(s => s.hasPromise && !s.isOrchestrator).length;
@@ -208,6 +258,23 @@ export function App({ version }: Props) {
           <Text color="yellow">
             Kill all {completedCount} completed session(s)? (y/n)
           </Text>
+        </Box>
+      )}
+
+      {/* Spawn prompt */}
+      {spawnMode && (
+        <Box marginY={1} paddingX={2} paddingY={1} borderStyle="round" borderColor="cyan" flexDirection="column">
+          <Text color="cyan">Spawn a new session</Text>
+          <Box marginTop={1}>
+            <Text dimColor>Args: </Text>
+            <TextInput
+              value={spawnArgs}
+              onChange={setSpawnArgs}
+              onSubmit={handleSpawnSubmit}
+              placeholder='claude --task "Fix the bug"'
+            />
+          </Box>
+          <Text dimColor>Enter to spawn, Esc to cancel</Text>
         </Box>
       )}
 

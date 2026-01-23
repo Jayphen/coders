@@ -31,8 +31,18 @@
     "url": "https://github.com/Jayphen/coders/issues"
   },
   "homepage": "https://github.com/Jayphen/coders#readme",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage"
+  },
   "dependencies": {
     "redis": "^5.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.0",
+    "@vitest/ui": "^1.6.0"
   },
   "files": [
     ".claude-plugin",

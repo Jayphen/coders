@@ -35,6 +35,7 @@ Opens the terminal UI for managing coder sessions. The TUI runs in its own tmux 
 | `↑` / `k` | Move selection up |
 | `↓` / `j` | Move selection down |
 | `Enter` / `a` | Attach to selected session |
+| `s` | Spawn a new session |
 | `K` | Kill selected session |
 | `r` | Refresh session list |
 | `q` | Quit TUI |

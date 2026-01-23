@@ -34,6 +34,7 @@ export function StatusBar({ sessionCount, completedCount = 0 }: Props) {
           <Text dimColor>
             <Text color="cyan">↑↓/jk</Text> nav
             <Text color="cyan"> a/↵</Text> attach
+            <Text color="cyan"> s</Text> spawn
             <Text color="cyan"> K</Text> kill
             <Text color="cyan"> r</Text> refresh
             <Text color="cyan"> q</Text> quit
