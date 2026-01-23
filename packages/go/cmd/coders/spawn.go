@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -136,6 +137,15 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 		fmt.Printf("\033[32m✅ %s is running\033[0m\n", tool)
 	} else {
 		fmt.Printf("\033[33m⚠️  Timeout waiting for %s (session created but process may still be starting)\033[0m\n", tool)
+	}
+
+	// Start heartbeat if enabled
+	if spawnHeartbeat {
+		if err := startHeartbeat(sessionID, spawnTask, ""); err != nil {
+			fmt.Printf("\033[33m⚠️  Failed to start heartbeat: %v\033[0m\n", err)
+		} else {
+			fmt.Printf("\033[32m💓 Heartbeat enabled\033[0m\n")
+		}
 	}
 
 	// Print attach instructions
@@ -331,4 +341,44 @@ func waitForCLIReady(sessionID, tool string, timeout time.Duration) bool {
 // shellEscape escapes a string for safe use in shell commands.
 func shellEscape(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+}
+
+// startHeartbeat starts a background heartbeat process for the session.
+func startHeartbeat(sessionID, task, parentSessionID string) error {
+	// Get the path to this executable
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	// Build heartbeat command args
+	args := []string{"heartbeat", "--session", sessionID}
+	if task != "" {
+		args = append(args, "--task", task)
+	}
+	if parentSessionID != "" {
+		args = append(args, "--parent", parentSessionID)
+	}
+
+	// Start heartbeat as a background process
+	cmd := exec.Command(exe, args...)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Stdin = nil
+
+	// Detach from parent process
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start heartbeat: %w", err)
+	}
+
+	// Don't wait for it - let it run in background
+	go func() {
+		cmd.Wait()
+	}()
+
+	return nil
 }

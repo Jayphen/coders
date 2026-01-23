@@ -103,9 +103,11 @@ Migration of TUI + CLI from TypeScript/Node.js to Go for improved performance an
 ## Phase 5: Background Processes
 
 ### Heartbeat
-- [ ] Port heartbeat script to Go
-- [ ] Run as background goroutine or subprocess
-- [ ] Write to Redis with session info
+- [x] Port heartbeat script to Go
+- [x] Run as background goroutine or subprocess
+- [x] Write to Redis with session info
+- [x] Parse usage stats from tmux pane (cost, tokens, API calls, limits)
+- [x] Integrate with spawn command (--heartbeat flag)
 
 ### Loop Runner (Optional)
 - [ ] Port loop runner logic

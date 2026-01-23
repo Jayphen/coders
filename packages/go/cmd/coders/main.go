@@ -29,6 +29,7 @@ running various AI coding tools like Claude, Gemini, Codex, and OpenCode.`,
 		newKillCmd(),
 		newPromiseCmd(),
 		newResumeCmd(),
+		newHeartbeatCmd(),
 		newTUICmd(),
 		newVersionCmd(),
 	)
