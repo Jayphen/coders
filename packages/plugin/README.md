@@ -26,6 +26,7 @@ No npm install needed - TypeScript files are loaded directly!
 **Available slash commands:**
 ```bash
 /coders:spawn claude --task "Build auth" --worktree feature/auth
+/coders:loop --todolist tasks.txt --cwd ~/project
 /coders:list
 /coders:attach my-session
 /coders:kill my-session
@@ -93,6 +94,7 @@ coders spawn claude --task "Hello world"
 - **Tmux Sessions**: Runs in separate tmux windows
 - **Redis Heartbeat**: Session monitoring, pub/sub for inter-agent communication
 - **Tmux Resurrect**: Snapshot/restore entire swarm
+- **Recursive Loop**: Automatically execute tasks from todolist with promise-based coordination and smart tool switching
 
 <img width="1505" height="1331" alt="Dashboard" src="https://github.com/user-attachments/assets/a9f46996-670c-4e13-975c-d8e381aaa0ab" />
 
