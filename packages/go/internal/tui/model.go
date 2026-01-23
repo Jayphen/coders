@@ -280,24 +280,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, textinput.Blink
 
 	case "q", "ctrl+c":
-		// If there's an orchestrator session, switch to it
-		var orchestrator *types.Session
-		for i := range m.sessions {
-			if m.sessions[i].IsOrchestrator {
-				orchestrator = &m.sessions[i]
-				break
-			}
-		}
-
-		currentSession, _ := tmux.GetCurrentSession()
-		if orchestrator != nil && currentSession != "" && currentSession != orchestrator.Name {
-			// Switch to the orchestrator session first
-			if err := tmux.AttachSession(orchestrator.Name); err == nil {
-				// Switch succeeded - spawn cleanup for old session after we quit
-				cmd := exec.Command("sh", "-c", fmt.Sprintf(`sleep 0.5 && tmux kill-session -t "%s"`, currentSession))
-				cmd.Start() // Fire and forget
-			}
-		}
 		return m, tea.Quit
 
 	case "up", "k":
