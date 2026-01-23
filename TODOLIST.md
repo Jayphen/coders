@@ -155,52 +155,52 @@ Migration of TUI + CLI from TypeScript/Node.js to Go for improved performance an
 
 ### High Priority
 
-- [ ] **Cache preview line splitting** (`views.go:321-349`)
+- [x] **Cache preview line splitting** (`views.go:321-349`)
   - `tailLines()` and `truncateLines()` split entire preview string on every render
   - Store last preview content hash and split result, only re-split when content changes
   - Critical: preview can be thousands of lines
 
-- [ ] **Pre-cache lipgloss styles** (`views.go:204-310`)
+- [x] **Pre-cache lipgloss styles** (`views.go:204-310`)
   - `renderSessionRow()` creates new style objects for each row on every render
   - Move to package-level cached styles in `styles.go` (e.g., `OrchestratorNameStyle`, `CompletedNameStyle`, `ActiveNameStyle`)
 
-- [ ] **Non-blocking Redis client init** (`model.go:478-492`)
+- [x] **Non-blocking Redis client init** (`model.go:478-492`)
   - Redis client created lazily during `fetchSessions()` which can block UI with 2-second timeout
   - Move initialization to `NewModel()` with non-blocking error handling
 
-- [ ] **Optimize session sorting** (`model.go:526-542`)
+- [x] **Optimize session sorting** (`model.go:526-542`)
   - Full O(n log n) sort every 5 seconds even when order hasn't changed
   - Cache session order signature, only re-sort on session add/remove
   - Use stable sort key instead of complex conditional comparisons
 
-- [ ] **Fix status bar string concatenation** (`views.go:599-601`)
+- [x] **Fix status bar string concatenation** (`views.go:599-601`)
   - Uses `+=` string concatenation instead of `strings.Builder`
 
 ### Medium Priority
 
-- [ ] **Pre-allocate command slices** (`model.go:187-197`)
+- [x] **Pre-allocate command slices** (`model.go:187-197`)
   - `cmds` slice grows dynamically with repeated appends
   - Pre-allocate with capacity (max ~3 commands)
 
-- [ ] **Cache ANSI-aware widths** (`views.go:314-318`)
+- [x] **Cache ANSI-aware widths** (`views.go:314-318`)
   - `lipgloss.Width()` called repeatedly per render, parses ANSI codes each time
   - Cache widths during initial render pass, reuse in `padRight()`
 
-- [ ] **Fix progress bar string concat** (`styles.go:142-148`)
+- [x] **Fix progress bar string concat** (`styles.go:142-148`)
   - Loop concatenation for filled/empty sections
   - Use `strings.Repeat()` instead
 
 ### Lower Priority
 
-- [ ] **Implement dirty tracking for View()** (`model.go:356-414`)
+- [x] **Implement dirty tracking for View()** (`model.go:356-414`)
   - Currently rebuilds entire view on every message
   - Only re-render changed sections (selection, session list, preview)
 
-- [ ] **Pre-allocate spawn args slice** (`model.go:602-642`)
+- [x] **Pre-allocate spawn args slice** (`model.go:602-642`)
   - Unbounded slice growth during argument parsing
   - Estimate count from spaces, pre-allocate
 
-- [ ] **Optimize process tree scanning** (`tmux/tmux.go:201-247`)
+- [x] **Optimize process tree scanning** (`tmux/tmux.go:201-247`)
   - Full `ps` output scan in `killSessionProcessTree()`
   - Consider platform-specific APIs or caching
 
