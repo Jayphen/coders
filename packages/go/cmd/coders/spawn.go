@@ -240,11 +240,14 @@ func buildToolCommand(tool, task, model, sessionID string, useOllama bool) strin
 		}
 
 		envVars += fmt.Sprintf(" ANTHROPIC_BASE_URL=%s", shellEscape(baseURL))
+		// Set API_KEY to empty string to prevent Claude Code from falling back to Anthropic
+		// and use AUTH_TOKEN for Bearer auth (required by most Ollama proxies)
+		envVars += " ANTHROPIC_API_KEY=''"
 		if authToken != "" {
 			envVars += fmt.Sprintf(" ANTHROPIC_AUTH_TOKEN=%s", shellEscape(authToken))
-		}
-		if apiKey != "" {
-			envVars += fmt.Sprintf(" ANTHROPIC_API_KEY=%s", shellEscape(apiKey))
+		} else if apiKey != "" {
+			// Fallback to API_KEY if AUTH_TOKEN not set
+			envVars += fmt.Sprintf(" ANTHROPIC_AUTH_TOKEN=%s", shellEscape(apiKey))
 		}
 	}
 
