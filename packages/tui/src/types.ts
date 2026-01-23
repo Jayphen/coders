@@ -28,6 +28,7 @@ export interface HeartbeatData {
   status: string;
   lastActivity?: string;
   parentSessionId?: string;
+  task?: string;
   usage?: {
     cost?: string;
     tokens?: number;

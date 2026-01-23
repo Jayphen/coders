@@ -18,6 +18,7 @@ const RECONNECT_MAX_MS = 30000;
 const sessionId = process.env.SESSION_ID || process.argv[2];
 const paneId = process.env.PANE_ID || `pane-${Date.now()}`;
 const parentSessionId = process.env.CODERS_PARENT_SESSION_ID || null;
+const taskDesc = process.env.CODERS_TASK_DESC || null;
 
 if (!sessionId) {
   console.error('Usage: heartbeat.js <session-id>');
@@ -189,6 +190,7 @@ async function publishHeartbeat() {
     sessionId,
     timestamp: Date.now(),
     parentSessionId,
+    task: taskDesc,
     usage
   };
 

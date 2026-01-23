@@ -153,10 +153,21 @@ function generateInitialPrompt(tool, taskDescription, contextFiles = []) {
   }
 
   prompt += '\nYou have full permissions. Complete the task.';
-  prompt += '\n\n⚠️  IMPORTANT: When you finish this task, you MUST publish a completion promise using:';
-  prompt += '\n/coders:promise "Brief summary of what you accomplished"';
-  prompt += '\n\nThis notifies the orchestrator and dashboard that your work is complete.';
-  prompt += '\nIf you get blocked, use: /coders:promise "Reason for being blocked" --status blocked';
+  prompt += '\n\n⚠️  IMPORTANT: When you finish this task, you MUST publish a completion promise.';
+
+  // Different promise instructions based on tool
+  if (tool === 'codex' || tool === 'openai-codex') {
+    // Codex exec mode: use bash command
+    prompt += '\nRun this shell command: coders promise "Brief summary of what you accomplished"';
+    prompt += '\n\nThis notifies the orchestrator and dashboard that your work is complete.';
+    prompt += '\nIf you get blocked, use: coders promise "Reason for being blocked" --status blocked';
+  } else {
+    // Claude and other interactive tools: use skill command
+    prompt += '\n/coders:promise "Brief summary of what you accomplished"';
+    prompt += '\n\nThis notifies the orchestrator and dashboard that your work is complete.';
+    prompt += '\nIf you get blocked, use: /coders:promise "Reason for being blocked" --status blocked';
+  }
+
   return prompt;
 }
 
@@ -252,8 +263,8 @@ function buildSpawnCommand(tool, promptFile, prompt, extraEnv = {}, model = null
     // Gemini: use --prompt-interactive with the prompt text to execute and stay interactive
     cmd = `${envPrefix}gemini --yolo${modelArg} --prompt-interactive '${escapedPrompt}'`;
   } else if (tool === 'codex' || tool === 'openai-codex') {
-    // Codex: provide initial prompt as positional argument, stays interactive by default
-    cmd = `${envPrefix}codex --dangerously-bypass-approvals-and-sandbox${modelArg} '${escapedPrompt}'`;
+    // Codex: use exec for non-interactive mode, pass prompt via stdin
+    cmd = `${envPrefix}codex exec --dangerously-bypass-approvals-and-sandbox${modelArg} < "${promptFile}"`;
   } else if (tool === 'opencode' || tool === 'open-code') {
     // OpenCode: pass prompt via stdin like Claude
     cmd = `${envPrefix}opencode${modelArg} < "${promptFile}"`;
@@ -280,6 +291,8 @@ async function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, ena
     WORKSPACE_DIR: effectiveCwd,
     CODERS_SESSION_ID: sessionId,
     CODERS_PARENT_SESSION_ID: effectiveParentSessionId
+    // TEMP DISABLED: CODERS_TASK_DESC causing shell escaping issues in tmux command
+    // CODERS_TASK_DESC: prompt.split('\n')[0].replace('TASK: ', '')
   }, model);
 
   log(`Creating NEW tmux window for: ${sessionId}`, 'blue');
@@ -316,7 +329,13 @@ async function spawnInNewTmuxWindow(tool, worktreePath, prompt, sessionName, ena
         try {
           const scriptDir = path.dirname(new URL(import.meta.url).pathname);
           const heartbeatScript = path.join(scriptDir, '../../assets/heartbeat.js');
-          execSync(`SESSION_ID="${sessionId}" nohup node ${heartbeatScript} "${sessionId}" > /dev/null 2>&1 &`);
+          const taskDesc = prompt.split('\n')[0].replace('TASK: ', '');
+          const heartbeatEnv = [
+            `SESSION_ID="${sessionId}"`,
+            `CODERS_PARENT_SESSION_ID="${effectiveParentSessionId || ''}"`,
+            `CODERS_TASK_DESC="${taskDesc.replace(/"/g, '\\"')}"`
+          ].join(' ');
+          execSync(`${heartbeatEnv} nohup node ${heartbeatScript} "${sessionId}" > /dev/null 2>&1 &`);
           log(`💓 Heartbeat enabled (dashboard will show status)`, 'green');
         } catch (e) {
           log(`⚠️  Heartbeat failed to start: ${e.message}`, 'yellow');
@@ -1427,6 +1446,70 @@ if (command === 'help' || !command) {
   })().catch((err) => {
     log(`❌ Failed to check promises: ${err.message}`, 'red');
   });
+} else if (command === 'loop') {
+  // Start recursive loop for auto-spawning tasks from todolist
+  let todolistPath = null;
+  let loopCwd = null;
+  let loopTool = 'claude';
+  let loopModel = null;
+  let maxConcurrent = 1;
+  let stopOnBlocked = false;
+  let background = true;
+
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--todolist' && args[i+1]) {
+      todolistPath = args[i+1];
+      i++;
+    } else if ((arg === '--cwd' || arg === '--dir') && args[i+1]) {
+      loopCwd = args[i+1];
+      i++;
+    } else if (arg === '--tool' && args[i+1]) {
+      loopTool = args[i+1];
+      i++;
+    } else if (arg === '--model' && args[i+1]) {
+      loopModel = args[i+1];
+      i++;
+    } else if (arg === '--max-concurrent' && args[i+1]) {
+      maxConcurrent = parseInt(args[i+1]);
+      i++;
+    } else if (arg === '--stop-on-blocked') {
+      stopOnBlocked = true;
+    } else if (arg === '--foreground') {
+      background = false;
+    }
+  }
+
+  if (!todolistPath || !loopCwd) {
+    log('Usage: coders loop --todolist <path> --cwd <dir> [options]', 'red');
+    log('Example: coders loop --todolist tasks.txt --cwd ~/project', 'yellow');
+    process.exit(1);
+  }
+
+  const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+  const loopRunner = path.join(scriptDir, 'loop-runner.js');
+
+  const loopArgs = [
+    '--todolist', todolistPath,
+    '--cwd', loopCwd,
+    '--tool', loopTool
+  ];
+
+  if (loopModel) loopArgs.push('--model', loopModel);
+  if (stopOnBlocked) loopArgs.push('--stop-on-blocked');
+
+  log(`🔄 Starting recursive loop`, 'blue');
+  log(`📂 Todolist: ${todolistPath}`, 'blue');
+  log(`📁 Working directory: ${loopCwd}`, 'blue');
+
+  if (background) {
+    log(`🔧 Running in background (use 'coders loop-status' to check progress)`, 'yellow');
+    execSync(`nohup node "${loopRunner}" ${loopArgs.join(' ')} > /tmp/coders-loop.log 2>&1 &`);
+    log(`✅ Loop started! Log: /tmp/coders-loop.log`, 'green');
+  } else {
+    log(`🔧 Running in foreground`, 'yellow');
+    execSync(`node "${loopRunner}" ${loopArgs.join(' ')}`, { stdio: 'inherit' });
+  }
 } else if (command === 'resume') {
   const sessionName = args[1];
 

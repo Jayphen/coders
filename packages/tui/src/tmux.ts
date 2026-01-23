@@ -1,9 +1,14 @@
 import { execSync, spawn } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import type { Session, CoderPromise, HeartbeatData } from './types.js';
 
 const PROMISE_KEY_PREFIX = 'coders:promise:';
 const PANE_KEY_PREFIX = 'coders:pane:';
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export function getCurrentSession(): string | null {
   try {
@@ -133,20 +138,21 @@ export async function getTmuxSessions(): Promise<Session[]> {
 
         const isOrchestrator = name === 'coder-orchestrator';
 
-        // Try to get a better task description:
-        // 1. From pane title if it's not a default shell prompt
-        // 2. Fall back to the slugified name
-        let task = taskFromName || undefined;
-        if (paneTitle && !paneTitle.includes('bash') && !paneTitle.includes('zsh') && paneTitle !== name) {
+        // Get promise data if available
+        const promise = promises.get(name);
+
+        // Get heartbeat data if available
+        const heartbeat = heartbeats.get(name);
+
+        // Try to get a better task description (priority order):
+        // 1. From heartbeat data (most reliable)
+        // 2. From pane title if it's not a default shell prompt
+        // 3. Fall back to the slugified name from session name
+        let task = heartbeat?.task || taskFromName || undefined;
+        if (!task && paneTitle && !paneTitle.includes('bash') && !paneTitle.includes('zsh') && paneTitle !== name) {
           // Pane title might have the full task
           task = paneTitle;
         }
-
-        // Get promise data if available
-        const promise = promises.get(name);
-        
-        // Get heartbeat data if available
-        const heartbeat = heartbeats.get(name);
         
         // Determine heartbeat status
         let heartbeatStatus: Session['heartbeatStatus'] = 'dead';
@@ -383,4 +389,70 @@ export function resumeSession(sessionName: string): boolean {
   } catch {
     return false;
   }
+}
+
+function shellEscape(value: string): string {
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+
+function resolveCodersLauncher(): string | null {
+  const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
+  if (pluginRoot) {
+    const candidate = path.join(pluginRoot, 'skills', 'coders', 'scripts', 'main.js');
+    if (fs.existsSync(candidate)) {
+      return `node ${shellEscape(candidate)}`;
+    }
+  }
+
+  const repoCandidate = path.resolve(__dirname, '../../plugin/skills/coders/scripts/main.js');
+  if (fs.existsSync(repoCandidate)) {
+    return `node ${shellEscape(repoCandidate)}`;
+  }
+
+  try {
+    execSync('command -v coders', { stdio: 'ignore' });
+    return 'coders';
+  } catch {
+    return null;
+  }
+}
+
+function normalizeSpawnArgs(input: string): string {
+  let trimmed = input.trim();
+  if (!trimmed) return '';
+
+  if (trimmed.startsWith('coders ')) {
+    trimmed = trimmed.replace(/^coders\s+/, '');
+  }
+  if (trimmed.startsWith('spawn ')) {
+    trimmed = trimmed.replace(/^spawn\s+/, '');
+  }
+  return trimmed.trim();
+}
+
+export async function spawnSession(spawnArgs: string): Promise<{ ok: boolean; message?: string }> {
+  const normalized = normalizeSpawnArgs(spawnArgs);
+  if (!normalized) {
+    return { ok: false, message: 'No spawn arguments provided' };
+  }
+
+  const launcher = resolveCodersLauncher();
+  if (!launcher) {
+    return { ok: false, message: 'coders CLI not found (set CLAUDE_PLUGIN_ROOT or install coders)' };
+  }
+
+  return new Promise((resolve) => {
+    const command = `${launcher} spawn ${normalized}`;
+    const child = spawn(command, { shell: true, stdio: 'ignore' });
+    child.on('error', (err) => {
+      resolve({ ok: false, message: err.message });
+    });
+    child.on('exit', (code) => {
+      if (code === 0) {
+        resolve({ ok: true });
+      } else {
+        resolve({ ok: false, message: `Spawn failed (exit ${code ?? 'unknown'})` });
+      }
+    });
+  });
 }
