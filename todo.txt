@@ -1,6 +1,9 @@
 # Coders Plugin - Task List
 # Derived from PRD roadmap and improvements
 
+## 🚨 HIGH PRIORITY
+[ ] **URGENT: Debug spawn persistence bug** - Sessions spawned via `coders spawn` exit immediately after creation, even though the exact same tmux command works when run manually. Root cause appears to be Node.js process lifecycle issue. Investigation documented in `packages/plugin/__investigation__/spawn-persistence-bug.md`. Needs system tracing (dtruss) or daemon-based spawner architecture.
+
 ## Phase 1: Reliability & Polish
 [x] Implement auto-reconnect logic for Redis disconnections
 [ ] Add health checks for proactive detection of stuck sessions
