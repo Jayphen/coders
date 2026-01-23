@@ -74,8 +74,8 @@ func (m Model) renderSessionList() string {
 
 	var b strings.Builder
 
-	// Column headers
-	headers := fmt.Sprintf(" %-3s%-28s%-10s%-20s%-8s",
+	// Column headers (widths match row: 3 + 26 + 12 + 22 + status)
+	headers := fmt.Sprintf(" %-3s%-26s%-12s%-22s%s",
 		"", "SESSION", "TOOL", "TASK/SUMMARY", "STATUS")
 	b.WriteString(DimStyle.Bold(true).Render(headers))
 	b.WriteString("\n")
@@ -208,9 +208,22 @@ func (m Model) renderSessionRow(index int) string {
 		}
 	}
 
-	// Format row with fixed widths
-	return fmt.Sprintf("%s%-28s%-10s%-20s%s",
-		selector, namePart, toolPart, taskPart, statusPart)
+	// Format row with fixed widths using lipgloss padding
+	// (fmt.Sprintf doesn't work with ANSI-styled strings)
+	namePadded := padRight(namePart, 26)
+	toolPadded := padRight(toolPart, 12)
+	taskPadded := padRight(taskPart, 22)
+
+	return selector + namePadded + toolPadded + taskPadded + statusPart
+}
+
+// padRight pads a string to the specified visible width.
+func padRight(s string, width int) string {
+	visibleWidth := lipgloss.Width(s)
+	if visibleWidth >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-visibleWidth)
 }
 
 // renderSessionDetail renders the detail panel for the selected session.
@@ -366,9 +379,16 @@ func (m Model) renderStatusBar() string {
 		BorderForeground(ColorGray).
 		PaddingTop(1)
 
+	// Calculate spacing using visible width, not byte length
+	countsWidth := lipgloss.Width(counts)
+	spacing := 40 - countsWidth
+	if spacing < 2 {
+		spacing = 2
+	}
+
 	var b strings.Builder
 	b.WriteString(counts)
-	b.WriteString(strings.Repeat(" ", 40-len(counts))) // Spacing
+	b.WriteString(strings.Repeat(" ", spacing))
 	b.WriteString(helpLine)
 	b.WriteString("\n")
 	b.WriteString(returnHelp)
