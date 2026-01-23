@@ -46,6 +46,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	// Try to get Redis data
 	var promises map[string]*types.CoderPromise
 	var heartbeats map[string]*types.HeartbeatData
+	var healthChecks map[string]*types.HealthCheckResult
 
 	redisClient, err := redis.NewClient()
 	if err == nil {
@@ -56,6 +57,7 @@ func runList(cmd *cobra.Command, args []string) error {
 
 		promises, _ = redisClient.GetPromises(ctx)
 		heartbeats, _ = redisClient.GetHeartbeats(ctx)
+		healthChecks, _ = redisClient.GetHealthChecks(ctx)
 	}
 
 	// Enrich sessions with Redis data
@@ -80,6 +82,11 @@ func runList(cmd *cobra.Command, args []string) error {
 			s.HeartbeatStatus = types.HeartbeatHealthy
 		} else {
 			s.HeartbeatStatus = types.HeartbeatDead
+		}
+
+		// Add health check data
+		if hc, ok := healthChecks[s.Name]; ok {
+			s.HealthCheck = hc
 		}
 	}
 
@@ -189,6 +196,14 @@ func printSessionTable(sessions []types.Session) {
 				status = tui.PromiseBlocked.Render("! blocked")
 			case types.PromiseNeedsReview:
 				status = tui.PromiseNeedsReview.Render("? review")
+			}
+		} else if s.HealthCheck != nil && (s.HealthCheck.Status == types.HealthStuck || s.HealthCheck.Status == types.HealthUnresponsive) {
+			// Show stuck/unresponsive from health check
+			switch s.HealthCheck.Status {
+			case types.HealthStuck:
+				status = tui.StatusStuck.Render("◉ stuck")
+			case types.HealthUnresponsive:
+				status = tui.StatusUnresponsive.Render("✗ unresponsive")
 			}
 		} else {
 			switch s.HeartbeatStatus {

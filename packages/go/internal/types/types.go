@@ -5,18 +5,19 @@ import "time"
 
 // Session represents a coder session (tmux session running an AI coding tool).
 type Session struct {
-	Name            string          `json:"name"`
-	Tool            string          `json:"tool"` // claude, gemini, codex, opencode, unknown
-	Task            string          `json:"task,omitempty"`
-	Cwd             string          `json:"cwd"`
-	CreatedAt       *time.Time      `json:"createdAt,omitempty"`
-	ParentSessionID string          `json:"parentSessionId,omitempty"`
-	IsOrchestrator  bool            `json:"isOrchestrator"`
-	HeartbeatStatus HeartbeatStatus `json:"heartbeatStatus,omitempty"`
-	LastActivity    *time.Time      `json:"lastActivity,omitempty"`
-	Promise         *CoderPromise   `json:"promise,omitempty"`
-	HasPromise      bool            `json:"hasPromise"`
-	Usage           *UsageStats     `json:"usage,omitempty"`
+	Name            string             `json:"name"`
+	Tool            string             `json:"tool"` // claude, gemini, codex, opencode, unknown
+	Task            string             `json:"task,omitempty"`
+	Cwd             string             `json:"cwd"`
+	CreatedAt       *time.Time         `json:"createdAt,omitempty"`
+	ParentSessionID string             `json:"parentSessionId,omitempty"`
+	IsOrchestrator  bool               `json:"isOrchestrator"`
+	HeartbeatStatus HeartbeatStatus    `json:"heartbeatStatus,omitempty"`
+	HealthCheck     *HealthCheckResult `json:"healthCheck,omitempty"`
+	LastActivity    *time.Time         `json:"lastActivity,omitempty"`
+	Promise         *CoderPromise      `json:"promise,omitempty"`
+	HasPromise      bool               `json:"hasPromise"`
+	Usage           *UsageStats        `json:"usage,omitempty"`
 }
 
 // HeartbeatStatus indicates the health of a session based on heartbeat age.
@@ -61,11 +62,49 @@ const (
 
 // UsageStats contains usage statistics for a session.
 type UsageStats struct {
-	Cost               string  `json:"cost,omitempty"`
-	Tokens             int     `json:"tokens,omitempty"`
-	APICalls           int     `json:"apiCalls,omitempty"`
-	SessionLimitPct    float64 `json:"sessionLimitPercent,omitempty"`
-	WeeklyLimitPct     float64 `json:"weeklyLimitPercent,omitempty"`
+	Cost            string  `json:"cost,omitempty"`
+	Tokens          int     `json:"tokens,omitempty"`
+	APICalls        int     `json:"apiCalls,omitempty"`
+	SessionLimitPct float64 `json:"sessionLimitPercent,omitempty"`
+	WeeklyLimitPct  float64 `json:"weeklyLimitPercent,omitempty"`
+}
+
+// HealthStatus indicates the overall health of a session.
+type HealthStatus string
+
+const (
+	HealthHealthy      HealthStatus = "healthy"      // Active and responsive
+	HealthStale        HealthStatus = "stale"        // Heartbeat aging (1-5 min)
+	HealthDead         HealthStatus = "dead"         // No heartbeat (>= 5 min)
+	HealthStuck        HealthStatus = "stuck"        // Pane output not changing for too long
+	HealthUnresponsive HealthStatus = "unresponsive" // tmux session exists but process seems hung
+)
+
+// HealthCheckResult contains the results of a health check for a session.
+type HealthCheckResult struct {
+	SessionID       string       `json:"sessionId"`
+	Timestamp       int64        `json:"timestamp"`
+	Status          HealthStatus `json:"status"`
+	HeartbeatAge    int64        `json:"heartbeatAgeMs,omitempty"`    // Milliseconds since last heartbeat
+	OutputHash      string       `json:"outputHash,omitempty"`        // Hash of recent pane output for change detection
+	OutputStaleFor  int64        `json:"outputStaleForMs,omitempty"`  // How long output has been unchanged
+	ProcessRunning  bool         `json:"processRunning"`              // Whether tmux pane process is alive
+	TmuxAlive       bool         `json:"tmuxAlive"`                   // Whether tmux session exists
+	Message         string       `json:"message,omitempty"`           // Human-readable status message
+	LastOutputHash  string       `json:"lastOutputHash,omitempty"`    // Previous output hash for comparison
+	LastCheckTime   int64        `json:"lastCheckTime,omitempty"`     // When last check was performed
+}
+
+// HealthCheckSummary provides an overview of all session health.
+type HealthCheckSummary struct {
+	Timestamp     int64               `json:"timestamp"`
+	TotalSessions int                 `json:"totalSessions"`
+	Healthy       int                 `json:"healthy"`
+	Stale         int                 `json:"stale"`
+	Dead          int                 `json:"dead"`
+	Stuck         int                 `json:"stuck"`
+	Unresponsive  int                 `json:"unresponsive"`
+	Sessions      []HealthCheckResult `json:"sessions"`
 }
 
 // ValidTools is the list of known AI coding tools.

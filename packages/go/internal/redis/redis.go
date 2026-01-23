@@ -5,9 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
+	"github.com/Jayphen/coders/internal/config"
 	"github.com/Jayphen/coders/internal/types"
 	"github.com/redis/go-redis/v9"
 )
@@ -17,8 +17,10 @@ const (
 	PromiseKeyPrefix = "coders:promise:"
 	// PaneKeyPrefix is the Redis key prefix for heartbeats.
 	PaneKeyPrefix = "coders:pane:"
-	// DefaultRedisURL is the default Redis connection URL.
-	DefaultRedisURL = "redis://localhost:6379"
+	// HealthKeyPrefix is the Redis key prefix for health check results.
+	HealthKeyPrefix = "coders:health:"
+	// HealthSummaryKey is the Redis key for the health check summary.
+	HealthSummaryKey = "coders:health:summary"
 )
 
 // Client wraps a Redis client with coders-specific operations.
@@ -28,12 +30,12 @@ type Client struct {
 
 // NewClient creates a new Redis client.
 func NewClient() (*Client, error) {
-	url := os.Getenv("REDIS_URL")
-	if url == "" {
-		url = DefaultRedisURL
+	cfg, err := config.Get()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	opts, err := redis.ParseURL(url)
+	opts, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse Redis URL: %w", err)
 	}
@@ -216,4 +218,102 @@ func DetermineHeartbeatStatus(hb *types.HeartbeatData) types.HeartbeatStatus {
 		return types.HeartbeatStale
 	}
 	return types.HeartbeatDead
+}
+
+// GetHealthChecks returns all session health check results.
+func (c *Client) GetHealthChecks(ctx context.Context) (map[string]*types.HealthCheckResult, error) {
+	healthChecks := make(map[string]*types.HealthCheckResult)
+
+	// Scan for all health check keys (excluding summary)
+	keys, err := c.scanKeys(ctx, HealthKeyPrefix+"*")
+	if err != nil {
+		return healthChecks, err
+	}
+
+	// Filter out the summary key
+	var sessionKeys []string
+	for _, k := range keys {
+		if k != HealthSummaryKey {
+			sessionKeys = append(sessionKeys, k)
+		}
+	}
+
+	if len(sessionKeys) == 0 {
+		return healthChecks, nil
+	}
+
+	// Get all values
+	values, err := c.rdb.MGet(ctx, sessionKeys...).Result()
+	if err != nil {
+		return healthChecks, err
+	}
+
+	for _, val := range values {
+		if val == nil {
+			continue
+		}
+
+		str, ok := val.(string)
+		if !ok {
+			continue
+		}
+
+		var hc types.HealthCheckResult
+		if err := json.Unmarshal([]byte(str), &hc); err != nil {
+			continue
+		}
+
+		if hc.SessionID != "" {
+			healthChecks[hc.SessionID] = &hc
+		}
+	}
+
+	return healthChecks, nil
+}
+
+// SetHealthCheck stores a health check result for a session.
+func (c *Client) SetHealthCheck(ctx context.Context, hc *types.HealthCheckResult) error {
+	data, err := json.Marshal(hc)
+	if err != nil {
+		return err
+	}
+
+	key := HealthKeyPrefix + hc.SessionID
+	// Health checks expire after 10 minutes (same as heartbeats)
+	return c.rdb.Set(ctx, key, data, 10*time.Minute).Err()
+}
+
+// GetHealthSummary returns the latest health check summary.
+func (c *Client) GetHealthSummary(ctx context.Context) (*types.HealthCheckSummary, error) {
+	data, err := c.rdb.Get(ctx, HealthSummaryKey).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var summary types.HealthCheckSummary
+	if err := json.Unmarshal([]byte(data), &summary); err != nil {
+		return nil, err
+	}
+
+	return &summary, nil
+}
+
+// SetHealthSummary stores a health check summary.
+func (c *Client) SetHealthSummary(ctx context.Context, summary *types.HealthCheckSummary) error {
+	data, err := json.Marshal(summary)
+	if err != nil {
+		return err
+	}
+
+	// Summary expires after 5 minutes
+	return c.rdb.Set(ctx, HealthSummaryKey, data, 5*time.Minute).Err()
+}
+
+// DeleteHealthCheck deletes a health check result for a session.
+func (c *Client) DeleteHealthCheck(ctx context.Context, sessionID string) error {
+	key := HealthKeyPrefix + sessionID
+	return c.rdb.Del(ctx, key).Err()
 }

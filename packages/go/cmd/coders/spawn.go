@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Jayphen/coders/internal/config"
 	"github.com/Jayphen/coders/internal/tmux"
 )
 
@@ -25,6 +26,17 @@ var (
 )
 
 func newSpawnCmd() *cobra.Command {
+	// Load config for defaults
+	cfg, _ := config.Get()
+	defaultTool := config.DefaultDefaultTool
+	defaultHeartbeat := config.DefaultDefaultHeartbeat
+	defaultModel := ""
+	if cfg != nil {
+		defaultTool = cfg.DefaultTool
+		defaultHeartbeat = cfg.DefaultHeartbeat
+		defaultModel = cfg.DefaultModel
+	}
+
 	cmd := &cobra.Command{
 		Use:   "spawn [tool]",
 		Short: "Spawn a new coder session",
@@ -41,11 +53,11 @@ Examples:
 		RunE: runSpawn,
 	}
 
-	cmd.Flags().StringVarP(&spawnTool, "tool", "t", "claude", "AI tool to use (claude, gemini, codex, opencode)")
+	cmd.Flags().StringVarP(&spawnTool, "tool", "t", defaultTool, "AI tool to use (claude, gemini, codex, opencode)")
 	cmd.Flags().StringVar(&spawnTask, "task", "", "Task description")
 	cmd.Flags().StringVar(&spawnCwd, "cwd", "", "Working directory (supports zoxide queries)")
-	cmd.Flags().StringVar(&spawnModel, "model", "", "Model to use (tool-specific)")
-	cmd.Flags().BoolVar(&spawnHeartbeat, "heartbeat", true, "Enable heartbeat monitoring")
+	cmd.Flags().StringVar(&spawnModel, "model", defaultModel, "Model to use (tool-specific)")
+	cmd.Flags().BoolVar(&spawnHeartbeat, "heartbeat", defaultHeartbeat, "Enable heartbeat monitoring")
 	cmd.Flags().BoolVarP(&spawnAttach, "attach", "a", false, "Attach to session after spawning")
 	cmd.Flags().BoolVar(&spawnOllama, "ollama", false, "Use Ollama backend (requires CODERS_OLLAMA_BASE_URL and CODERS_OLLAMA_AUTH_TOKEN)")
 
@@ -67,20 +79,21 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid tool '%s': must be claude, gemini, codex, or opencode", tool)
 	}
 
-	// Validate Ollama environment variables if --ollama is set
+	// Validate Ollama settings if --ollama is set
 	if spawnOllama {
 		if tool != "claude" {
 			return fmt.Errorf("--ollama flag is only supported with claude tool")
 		}
-		baseURL := os.Getenv("CODERS_OLLAMA_BASE_URL")
-		authToken := os.Getenv("CODERS_OLLAMA_AUTH_TOKEN")
-		apiKey := os.Getenv("CODERS_OLLAMA_API_KEY")
-
-		if baseURL == "" {
-			return fmt.Errorf("--ollama requires CODERS_OLLAMA_BASE_URL environment variable")
+		cfg, err := config.Get()
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
 		}
-		if authToken == "" && apiKey == "" {
-			return fmt.Errorf("--ollama requires CODERS_OLLAMA_AUTH_TOKEN or CODERS_OLLAMA_API_KEY environment variable")
+
+		if cfg.Ollama.BaseURL == "" {
+			return fmt.Errorf("--ollama requires CODERS_OLLAMA_BASE_URL environment variable or ollama.base_url in config")
+		}
+		if cfg.Ollama.AuthToken == "" && cfg.Ollama.APIKey == "" {
+			return fmt.Errorf("--ollama requires CODERS_OLLAMA_AUTH_TOKEN/API_KEY or ollama.auth_token/api_key in config")
 		}
 	}
 
@@ -230,9 +243,10 @@ func buildToolCommand(tool, task, model, sessionID string, useOllama bool) strin
 
 	// Add Ollama env var mappings if --ollama flag is set
 	if useOllama {
-		baseURL := os.Getenv("CODERS_OLLAMA_BASE_URL")
-		authToken := os.Getenv("CODERS_OLLAMA_AUTH_TOKEN")
-		apiKey := os.Getenv("CODERS_OLLAMA_API_KEY")
+		cfg, _ := config.Get()
+		baseURL := cfg.Ollama.BaseURL
+		authToken := cfg.Ollama.AuthToken
+		apiKey := cfg.Ollama.APIKey
 
 		// Ensure URL has protocol
 		if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {

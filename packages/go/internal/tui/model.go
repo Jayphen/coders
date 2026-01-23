@@ -357,6 +357,7 @@ func (m Model) fetchSessions() tea.Msg {
 	// Try to get Redis data (non-fatal if unavailable)
 	var promises map[string]*types.CoderPromise
 	var heartbeats map[string]*types.HeartbeatData
+	var healthChecks map[string]*types.HealthCheckResult
 
 	if m.redisClient == nil {
 		client, err := redis.NewClient()
@@ -371,6 +372,7 @@ func (m Model) fetchSessions() tea.Msg {
 
 		promises, _ = m.redisClient.GetPromises(ctx)
 		heartbeats, _ = m.redisClient.GetHeartbeats(ctx)
+		healthChecks, _ = m.redisClient.GetHealthChecks(ctx)
 	}
 
 	// Enrich sessions with Redis data
@@ -397,6 +399,11 @@ func (m Model) fetchSessions() tea.Msg {
 			s.HeartbeatStatus = types.HeartbeatHealthy
 		} else {
 			s.HeartbeatStatus = types.HeartbeatDead
+		}
+
+		// Add health check data (for stuck/unresponsive detection)
+		if hc, ok := healthChecks[s.Name]; ok {
+			s.HealthCheck = hc
 		}
 	}
 

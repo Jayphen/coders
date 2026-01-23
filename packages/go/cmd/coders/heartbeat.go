@@ -14,13 +14,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Jayphen/coders/internal/config"
 	"github.com/Jayphen/coders/internal/redis"
 	"github.com/Jayphen/coders/internal/types"
-)
-
-const (
-	heartbeatInterval = 30 * time.Second
-	heartbeatTTL      = 150 * time.Second // 2.5 minutes
 )
 
 var (
@@ -50,6 +46,13 @@ It publishes heartbeat data every 30 seconds including usage statistics.`,
 }
 
 func runHeartbeat(cmd *cobra.Command, args []string) error {
+	// Load config for heartbeat interval
+	cfg, err := config.Get()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+	heartbeatInterval := cfg.HeartbeatInterval
+
 	// Get session ID from flag, env, or args
 	sessionID := heartbeatSessionID
 	if sessionID == "" {

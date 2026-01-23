@@ -98,17 +98,25 @@ var (
 			Foreground(ColorYellow)
 )
 
+// Health status styles (for stuck/unresponsive detection)
+var (
+	StatusStuck        = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B"))
+	StatusUnresponsive = lipgloss.NewStyle().Foreground(ColorRed).Bold(true)
+)
+
 // Status indicators
 const (
-	IndicatorHealthy   = "●"
-	IndicatorStale     = "◐"
-	IndicatorDead      = "○"
-	IndicatorCompleted = "✓"
-	IndicatorBlocked   = "!"
-	IndicatorReview    = "?"
-	IndicatorSelected  = "❯"
-	IndicatorOrchestra = "🎯"
-	IndicatorChild     = "├─"
+	IndicatorHealthy      = "●"
+	IndicatorStale        = "◐"
+	IndicatorDead         = "○"
+	IndicatorStuck        = "◉"
+	IndicatorUnresponsive = "✗"
+	IndicatorCompleted    = "✓"
+	IndicatorBlocked      = "!"
+	IndicatorReview       = "?"
+	IndicatorSelected     = "❯"
+	IndicatorOrchestra    = "🎯"
+	IndicatorChild        = "├─"
 )
 
 // Progress bar characters

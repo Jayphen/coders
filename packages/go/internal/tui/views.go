@@ -197,6 +197,14 @@ func (m Model) renderSessionRow(index int) string {
 		case types.PromiseNeedsReview:
 			statusPart = PromiseNeedsReview.Render(IndicatorReview)
 		}
+	} else if s.HealthCheck != nil && (s.HealthCheck.Status == types.HealthStuck || s.HealthCheck.Status == types.HealthUnresponsive) {
+		// Show stuck/unresponsive from health check
+		switch s.HealthCheck.Status {
+		case types.HealthStuck:
+			statusPart = StatusStuck.Render(IndicatorStuck)
+		case types.HealthUnresponsive:
+			statusPart = StatusUnresponsive.Render(IndicatorUnresponsive)
+		}
 	} else {
 		switch s.HeartbeatStatus {
 		case types.HeartbeatHealthy:
@@ -318,6 +326,25 @@ func (m Model) renderSessionDetail() string {
 	// Parent session
 	if s.ParentSessionID != "" {
 		b.WriteString(m.renderDetailRow("Parent:", s.ParentSessionID))
+	}
+
+	// Health check info (if stuck or unresponsive)
+	if s.HealthCheck != nil && (s.HealthCheck.Status == types.HealthStuck || s.HealthCheck.Status == types.HealthUnresponsive) {
+		b.WriteString("\n")
+		var healthStyle lipgloss.Style
+		var healthLabel string
+		switch s.HealthCheck.Status {
+		case types.HealthStuck:
+			healthStyle = StatusStuck
+			healthLabel = IndicatorStuck + " Stuck"
+		case types.HealthUnresponsive:
+			healthStyle = StatusUnresponsive
+			healthLabel = IndicatorUnresponsive + " Unresponsive"
+		}
+		b.WriteString(m.renderDetailRow("Health:", healthStyle.Render(healthLabel)))
+		if s.HealthCheck.Message != "" {
+			b.WriteString(m.renderDetailRow("", DimStyle.Render(s.HealthCheck.Message)))
+		}
 	}
 
 	// Wrap in box
