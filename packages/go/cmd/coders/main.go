@@ -46,6 +46,7 @@ running various AI coding tools like Claude, Gemini, Codex, and OpenCode.`,
 		newTUICmd(),
 		newVersionCmd(),
 		newConfigCmd(),
+		newTestNotifyCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {
