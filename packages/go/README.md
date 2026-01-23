@@ -40,7 +40,7 @@ Interactive terminal UI for managing sessions:
 - `C` - Kill all completed sessions
 - `R` - Resume completed session
 - `r` - Refresh
-- `q` - Quit
+- `q` - Quit (switches to orchestrator and kills TUI session if orchestrator exists)
 
 ### List Sessions
 

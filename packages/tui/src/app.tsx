@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import TextInput from 'ink-text-input';
+import { spawn } from 'child_process';
 import { SessionList } from './components/SessionList.js';
 import { SessionDetail } from './components/SessionDetail.js';
 import { StatusBar } from './components/StatusBar.js';
 import { Header } from './components/Header.js';
 import type { Session } from './types.js';
-import { getTmuxSessions, attachSession, killSession, killCompletedSessions, resumeSession, spawnSession } from './tmux.js';
+import { getTmuxSessions, attachSession, killSession, killCompletedSessions, resumeSession, spawnSession, getCurrentSession } from './tmux.js';
 
 interface Props {
   version?: string;
@@ -178,7 +179,22 @@ export function App({ version }: Props) {
     }
 
     if (input === 'q') {
-      exit();
+      // If there's an orchestrator session, switch to it and kill the TUI session
+      const orchestrator = sessionsRef.current.find(s => s.isOrchestrator);
+      const currentSession = getCurrentSession();
+
+      if (orchestrator && currentSession && currentSession !== orchestrator.name) {
+        // Spawn a background process to kill this session after a short delay
+        // This gives time for the switch to complete before we're killed
+        spawn('sh', ['-c', `sleep 0.2 && tmux kill-session -t "${currentSession}"`], {
+          detached: true,
+          stdio: 'ignore',
+        });
+        // Switch to the orchestrator session
+        attachSession(orchestrator.name);
+      } else {
+        exit();
+      }
       return;
     }
 

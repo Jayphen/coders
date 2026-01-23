@@ -10,6 +10,7 @@
 [ ] Implement automatic session restart on crash (error recovery)
 [ ] Add structured logging for better debugging
 [ ] Create configuration file support (YAML/JSON) for default settings
+[ ] Add `--ollama` spawn flag to map `CODERS_OLLAMA_*` env vars to `ANTHROPIC_*` for Claude Code sessions (see `OLLAMA_CLAUDE_CODE.md`)
 [ ] Implement graceful degradation when Redis is unavailable (local fallback)
 [ ] Document minimum tmux version requirements
 
