@@ -148,7 +148,7 @@ func (m Model) renderMainContent(maxHeight int) string {
 
 	const (
 		gap      = 2
-		minLeft  = 64
+		minLeft  = 72
 		minRight = 32
 	)
 
@@ -344,6 +344,18 @@ func tailLines(s string, maxLines int) string {
 	lines := strings.Split(s, "\n")
 	if len(lines) <= maxLines {
 		return s
+	}
+	return strings.Join(lines[len(lines)-maxLines:], "\n")
+}
+
+// tailLinesFromSlice is an optimized version that operates on pre-split lines.
+// This avoids re-splitting the same text on every render.
+func tailLinesFromSlice(lines []string, maxLines int) string {
+	if maxLines <= 0 {
+		return ""
+	}
+	if len(lines) <= maxLines {
+		return strings.Join(lines, "\n")
 	}
 	return strings.Join(lines[len(lines)-maxLines:], "\n")
 }
@@ -596,10 +608,12 @@ func (m Model) renderStatusBar() string {
 	}
 
 	// Session counts
-	counts := DimStyle.Render(fmt.Sprintf("%d active", activeCount))
+	var countsBuilder strings.Builder
+	countsBuilder.WriteString(DimStyle.Render(fmt.Sprintf("%d active", activeCount)))
 	if completedCount > 0 {
-		counts += DimStyle.Render(fmt.Sprintf(", %d completed", completedCount))
+		countsBuilder.WriteString(DimStyle.Render(fmt.Sprintf(", %d completed", completedCount)))
 	}
+	counts := countsBuilder.String()
 
 	// Help text
 	help := []string{
