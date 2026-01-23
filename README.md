@@ -33,19 +33,52 @@ claude plugin install coders@coders
 /coders:restore
 ```
 
-### Terminal UI (Optional)
+### Go CLI & TUI (Optional)
+
+The `coders` binary provides a terminal UI and CLI tools for managing sessions.
+
+#### Install via Script (Recommended)
 
 ```bash
-# Install the Go-based TUI
 curl -fsSL https://raw.githubusercontent.com/Jayphen/coders/go-rewrite/packages/go/install.sh | bash
+```
 
-# Or build from source
+This script:
+- Detects your OS (macOS/Linux) and architecture (amd64/arm64)
+- Downloads the latest release from GitHub
+- Installs to `/usr/local/bin/coders` (customize with `INSTALL_DIR`)
+
+#### Download from GitHub Releases
+
+1. Visit [GitHub Releases](https://github.com/Jayphen/coders/releases/latest)
+2. Download the binary for your platform:
+   - `coders-darwin-amd64` (macOS Intel)
+   - `coders-darwin-arm64` (macOS Apple Silicon)
+   - `coders-linux-amd64` (Linux x86_64)
+   - `coders-linux-arm64` (Linux ARM64)
+3. Make it executable and move to your PATH:
+   ```bash
+   chmod +x coders-*
+   sudo mv coders-* /usr/local/bin/coders
+   ```
+
+#### Build from Source
+
+Requires Go 1.21+
+
+```bash
 cd packages/go
-make build
-make install
+make build    # Creates ./coders-tui
+make install  # Installs to /usr/local/bin
+```
 
-# Run it
-coders-tui tui
+#### Usage
+
+```bash
+coders --help         # View available commands
+coders tui            # Launch the TUI
+coders spawn <tool>   # Spawn a new session
+coders list           # List all sessions
 ```
 
 ```
