@@ -179,22 +179,7 @@ export function App({ version }: Props) {
     }
 
     if (input === 'q') {
-      // If there's an orchestrator session, switch to it and kill the TUI session
-      const orchestrator = sessionsRef.current.find(s => s.isOrchestrator);
-      const currentSession = getCurrentSession();
-
-      if (orchestrator && currentSession && currentSession !== orchestrator.name) {
-        // Spawn a background process to kill this session after a short delay
-        // This gives time for the switch to complete before we're killed
-        spawn('sh', ['-c', `sleep 0.2 && tmux kill-session -t "${currentSession}"`], {
-          detached: true,
-          stdio: 'ignore',
-        });
-        // Switch to the orchestrator session
-        attachSession(orchestrator.name);
-      } else {
-        exit();
-      }
+      exit();
       return;
     }
 
@@ -294,13 +279,6 @@ export function App({ version }: Props) {
         </Box>
       )}
 
-      {/* Status message */}
-      {statusMessage && !confirmKillCompleted && (
-        <Box marginY={1} paddingX={2}>
-          <Text color="cyan">{statusMessage}</Text>
-        </Box>
-      )}
-
       {error ? (
         <Box marginY={1}>
           <Text color="red">Error: {error}</Text>
@@ -316,7 +294,11 @@ export function App({ version }: Props) {
         </>
       )}
 
-      <StatusBar sessionCount={sessions.length} completedCount={completedCount} />
+      <StatusBar
+        sessionCount={sessions.length}
+        completedCount={completedCount}
+        statusMessage={!confirmKillCompleted ? statusMessage : null}
+      />
     </Box>
   );
 }

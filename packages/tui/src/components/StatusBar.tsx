@@ -3,9 +3,10 @@ import { Box, Text } from 'ink';
 interface Props {
   sessionCount: number;
   completedCount?: number;
+  statusMessage?: string | null;
 }
 
-export function StatusBar({ sessionCount, completedCount = 0 }: Props) {
+export function StatusBar({ sessionCount, completedCount = 0, statusMessage }: Props) {
   const activeCount = sessionCount - completedCount;
 
   return (
@@ -20,6 +21,13 @@ export function StatusBar({ sessionCount, completedCount = 0 }: Props) {
       borderColor="gray"
       flexDirection="column"
     >
+      {/* Reserve fixed space for status message */}
+      <Box height={1} marginBottom={1}>
+        {statusMessage && (
+          <Text color="cyan">{statusMessage}</Text>
+        )}
+      </Box>
+
       <Box>
         <Box flexGrow={1}>
           <Text dimColor>
