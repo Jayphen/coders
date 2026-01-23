@@ -234,6 +234,11 @@ func buildToolCommand(tool, task, model, sessionID string, useOllama bool) strin
 		authToken := os.Getenv("CODERS_OLLAMA_AUTH_TOKEN")
 		apiKey := os.Getenv("CODERS_OLLAMA_API_KEY")
 
+		// Ensure URL has protocol
+		if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+			baseURL = "https://" + baseURL
+		}
+
 		envVars += fmt.Sprintf(" ANTHROPIC_BASE_URL=%s", shellEscape(baseURL))
 		if authToken != "" {
 			envVars += fmt.Sprintf(" ANTHROPIC_AUTH_TOKEN=%s", shellEscape(authToken))
