@@ -42,6 +42,29 @@ Interactive terminal UI for managing sessions:
 - `r` - Refresh
 - `q` - Quit (switches to orchestrator and kills TUI session if orchestrator exists)
 
+### Spawn Sessions
+
+```bash
+coders spawn claude --task "Fix the login bug"
+coders spawn claude --task "Add tests" --cwd ~/projects/myapp
+coders spawn claude --model sonnet --attach  # Spawn and attach immediately
+```
+
+#### Ollama Backend
+
+Run sessions using Ollama instead of Anthropic's API:
+
+```bash
+# Set environment variables
+export CODERS_OLLAMA_BASE_URL="https://ollama.example.com"
+export CODERS_OLLAMA_AUTH_TOKEN="your-token"
+
+# Spawn with --ollama flag
+coders spawn claude --ollama --model qwen3-coder:30b --task "Fix lint errors"
+```
+
+The `--ollama` flag maps `CODERS_OLLAMA_*` env vars to `ANTHROPIC_*` vars for that session only, so you can run Anthropic and Ollama sessions side by side.
+
 ### List Sessions
 
 ```bash

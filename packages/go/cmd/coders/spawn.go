@@ -21,6 +21,7 @@ var (
 	spawnModel     string
 	spawnHeartbeat bool
 	spawnAttach    bool
+	spawnOllama    bool
 )
 
 func newSpawnCmd() *cobra.Command {
@@ -46,6 +47,7 @@ Examples:
 	cmd.Flags().StringVar(&spawnModel, "model", "", "Model to use (tool-specific)")
 	cmd.Flags().BoolVar(&spawnHeartbeat, "heartbeat", true, "Enable heartbeat monitoring")
 	cmd.Flags().BoolVarP(&spawnAttach, "attach", "a", false, "Attach to session after spawning")
+	cmd.Flags().BoolVar(&spawnOllama, "ollama", false, "Use Ollama backend (requires CODERS_OLLAMA_BASE_URL and CODERS_OLLAMA_AUTH_TOKEN)")
 
 	return cmd
 }
@@ -63,6 +65,23 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 	}
 	if !validTools[tool] {
 		return fmt.Errorf("invalid tool '%s': must be claude, gemini, codex, or opencode", tool)
+	}
+
+	// Validate Ollama environment variables if --ollama is set
+	if spawnOllama {
+		if tool != "claude" {
+			return fmt.Errorf("--ollama flag is only supported with claude tool")
+		}
+		baseURL := os.Getenv("CODERS_OLLAMA_BASE_URL")
+		authToken := os.Getenv("CODERS_OLLAMA_AUTH_TOKEN")
+		apiKey := os.Getenv("CODERS_OLLAMA_API_KEY")
+
+		if baseURL == "" {
+			return fmt.Errorf("--ollama requires CODERS_OLLAMA_BASE_URL environment variable")
+		}
+		if authToken == "" && apiKey == "" {
+			return fmt.Errorf("--ollama requires CODERS_OLLAMA_AUTH_TOKEN or CODERS_OLLAMA_API_KEY environment variable")
+		}
 	}
 
 	// Resolve working directory
@@ -87,7 +106,7 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build the command to run
-	toolCmd := buildToolCommand(tool, spawnTask, spawnModel, sessionID)
+	toolCmd := buildToolCommand(tool, spawnTask, spawnModel, sessionID, spawnOllama)
 
 	// Get user's shell
 	shell := os.Getenv("SHELL")
@@ -199,7 +218,7 @@ func generateSessionName(tool, task string) string {
 }
 
 // buildToolCommand builds the command to run the AI tool.
-func buildToolCommand(tool, task, model, sessionID string) string {
+func buildToolCommand(tool, task, model, sessionID string, useOllama bool) string {
 	var cmd string
 	modelArg := ""
 	if model != "" {
@@ -208,6 +227,21 @@ func buildToolCommand(tool, task, model, sessionID string) string {
 
 	// Set environment variables
 	envVars := fmt.Sprintf("CODERS_SESSION_ID=%s", sessionID)
+
+	// Add Ollama env var mappings if --ollama flag is set
+	if useOllama {
+		baseURL := os.Getenv("CODERS_OLLAMA_BASE_URL")
+		authToken := os.Getenv("CODERS_OLLAMA_AUTH_TOKEN")
+		apiKey := os.Getenv("CODERS_OLLAMA_API_KEY")
+
+		envVars += fmt.Sprintf(" ANTHROPIC_BASE_URL=%s", shellEscape(baseURL))
+		if authToken != "" {
+			envVars += fmt.Sprintf(" ANTHROPIC_AUTH_TOKEN=%s", shellEscape(authToken))
+		}
+		if apiKey != "" {
+			envVars += fmt.Sprintf(" ANTHROPIC_API_KEY=%s", shellEscape(apiKey))
+		}
+	}
 
 	switch tool {
 	case "claude":
