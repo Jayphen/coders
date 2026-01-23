@@ -635,6 +635,14 @@ func (m Model) renderStatusBar() string {
 	}
 
 	var b strings.Builder
+
+	// Status message (if present)
+	if m.statusMessage != "" && !m.confirmKill {
+		statusLine := StatusMsgStyle.Render(m.statusMessage)
+		b.WriteString(statusLine)
+		b.WriteString("\n")
+	}
+
 	b.WriteString(counts)
 	b.WriteString(strings.Repeat(" ", spacing))
 	b.WriteString(helpLine)

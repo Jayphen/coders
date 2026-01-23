@@ -394,13 +394,6 @@ func (m Model) View() string {
 		b.WriteString("\n")
 	}
 
-	// Status message
-	if m.statusMessage != "" && !m.confirmKill {
-		status := StatusMsgStyle.Render(m.statusMessage)
-		b.WriteString(status)
-		b.WriteString("\n\n")
-	}
-
 	contentHeight := 0
 	if m.height > 0 {
 		innerHeight := m.height - 2 // outer padding
@@ -410,9 +403,6 @@ func (m Model) View() string {
 		}
 		if m.spawnMode {
 			usedHeight += lipgloss.Height(m.renderSpawnPrompt()) + 1
-		}
-		if m.statusMessage != "" && !m.confirmKill {
-			usedHeight += lipgloss.Height(StatusMsgStyle.Render(m.statusMessage)) + 2
 		}
 		statusBar := m.renderStatusBar()
 		usedHeight += 1 + lipgloss.Height(statusBar)
