@@ -149,11 +149,52 @@ func RenderProgressBar(percent float64, width int) string {
 	return bar
 }
 
-// GetToolStyle returns the style for a tool name.
-func GetToolStyle(tool string) lipgloss.Style {
-	color, ok := ToolColors[tool]
-	if !ok {
-		color = ColorGray
+// Session row name styles (pre-cached for performance)
+var (
+	NameStyleDefault      = lipgloss.NewStyle()
+	NameStyleOrchestrator = lipgloss.NewStyle().Foreground(ColorCyan).Bold(true)
+	NameStyleCompleted    = lipgloss.NewStyle().Foreground(ColorGray)
+	NameStyleSelected     = lipgloss.NewStyle().Bold(true)
+)
+
+// Session row task styles (pre-cached for performance)
+var (
+	TaskStyleDefault = lipgloss.NewStyle()
+	TaskStyleDimmed  = lipgloss.NewStyle().Foreground(ColorDimGray)
+)
+
+// Tool styles (pre-cached for performance)
+var (
+	toolStyleCache       map[string]lipgloss.Style
+	toolStyleDimmedCache map[string]lipgloss.Style
+)
+
+func init() {
+	// Pre-cache all tool styles to avoid creating them on each render
+	toolStyleCache = make(map[string]lipgloss.Style)
+	toolStyleDimmedCache = make(map[string]lipgloss.Style)
+
+	for tool, color := range ToolColors {
+		toolStyleCache[tool] = lipgloss.NewStyle().Foreground(color)
+		toolStyleDimmedCache[tool] = lipgloss.NewStyle().Foreground(ColorDimGray)
 	}
-	return lipgloss.NewStyle().Foreground(color)
+	// Unknown/default tool
+	toolStyleCache["unknown"] = lipgloss.NewStyle().Foreground(ColorGray)
+	toolStyleDimmedCache["unknown"] = lipgloss.NewStyle().Foreground(ColorDimGray)
+}
+
+// GetToolStyle returns the cached style for a tool name.
+func GetToolStyle(tool string) lipgloss.Style {
+	if style, ok := toolStyleCache[tool]; ok {
+		return style
+	}
+	return toolStyleCache["unknown"]
+}
+
+// GetToolStyleDimmed returns the cached dimmed style for a tool (used for completed sessions).
+func GetToolStyleDimmed(tool string) lipgloss.Style {
+	if style, ok := toolStyleDimmedCache[tool]; ok {
+		return style
+	}
+	return toolStyleDimmedCache["unknown"]
 }

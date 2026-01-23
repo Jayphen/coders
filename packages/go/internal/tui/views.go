@@ -227,13 +227,16 @@ func (m Model) renderSessionRow(index int) string {
 		prefix = IndicatorChild + " "
 	}
 
-	nameStyle := lipgloss.NewStyle()
+	// Select pre-cached name style based on session state
+	var nameStyle lipgloss.Style
 	if s.IsOrchestrator {
-		nameStyle = nameStyle.Foreground(ColorCyan).Bold(true)
+		nameStyle = NameStyleOrchestrator
 	} else if s.HasPromise {
-		nameStyle = nameStyle.Foreground(ColorGray)
+		nameStyle = NameStyleCompleted
 	} else if isSelected {
-		nameStyle = nameStyle.Bold(true)
+		nameStyle = NameStyleSelected
+	} else {
+		nameStyle = NameStyleDefault
 	}
 
 	// Truncate name
@@ -246,12 +249,13 @@ func (m Model) renderSessionRow(index int) string {
 	}
 	namePart := nameStyle.Render(prefix + displayName)
 
-	// Tool
-	toolStyle := GetToolStyle(s.Tool)
+	// Tool - use pre-cached tool style
+	var toolPart string
 	if s.HasPromise {
-		toolStyle = toolStyle.Foreground(ColorDimGray)
+		toolPart = GetToolStyleDimmed(s.Tool).Render(s.Tool)
+	} else {
+		toolPart = GetToolStyle(s.Tool).Render(s.Tool)
 	}
-	toolPart := toolStyle.Render(s.Tool)
 
 	// Task/Summary
 	displayText := s.Task
@@ -264,11 +268,13 @@ func (m Model) renderSessionRow(index int) string {
 	if len(displayText) > 20 {
 		displayText = displayText[:17] + "..."
 	}
-	taskStyle := lipgloss.NewStyle()
+	// Use pre-cached task style
+	var taskPart string
 	if s.HasPromise || displayText == "-" {
-		taskStyle = taskStyle.Foreground(ColorDimGray)
+		taskPart = TaskStyleDimmed.Render(displayText)
+	} else {
+		taskPart = TaskStyleDefault.Render(displayText)
 	}
-	taskPart := taskStyle.Render(displayText)
 
 	// Status indicator
 	var statusPart string
@@ -344,18 +350,6 @@ func tailLines(s string, maxLines int) string {
 	lines := strings.Split(s, "\n")
 	if len(lines) <= maxLines {
 		return s
-	}
-	return strings.Join(lines[len(lines)-maxLines:], "\n")
-}
-
-// tailLinesFromSlice is an optimized version that operates on pre-split lines.
-// This avoids re-splitting the same text on every render.
-func tailLinesFromSlice(lines []string, maxLines int) string {
-	if maxLines <= 0 {
-		return ""
-	}
-	if len(lines) <= maxLines {
-		return strings.Join(lines, "\n")
 	}
 	return strings.Join(lines[len(lines)-maxLines:], "\n")
 }
@@ -583,7 +577,12 @@ func (m Model) renderSessionPreview(width int, maxHeight int) string {
 		if maxContentLines < minContentLines {
 			return ""
 		}
-		content = tailLines(content, maxContentLines)
+		// Use cached split lines if available and content hasn't been modified
+		if content == m.previewSplitText && m.previewSplitLines != nil {
+			content = tailLinesFromSlice(m.previewSplitLines, maxContentLines)
+		} else {
+			content = tailLines(content, maxContentLines)
+		}
 	}
 
 	return style.Render(header + "\n\n" + content + "\n\n" + inputLine)
