@@ -2,23 +2,24 @@
 
 This is a monorepo containing:
 - `packages/plugin` - Claude Code plugin (distributed via git/npm)
-- `packages/tui` - Terminal UI (distributed via npm)
+- `packages/go` - Go implementation (TUI, CLI tools, orchestrator)
 
 ## Deployment
 
-### TUI (`@jayphen/coders-tui`)
+### Go Binary (coders-tui)
 
-**When to deploy:** Only when files in `packages/tui/` are changed.
+The Go binary is built and distributed from `packages/go/`:
 
 ```bash
-cd packages/tui
-pnpm build
-npm version patch --no-git-tag-version
-npm publish --access public --otp=<OTP>
-git add -A && git commit -m "chore: release @jayphen/coders-tui vX.X.X" && git push
+cd packages/go
+make build        # Build the binary
+make install      # Install to /usr/local/bin
 ```
 
-The TUI is lazy-installed by the plugin on first use from npm. Users get updates by clearing `~/.cache/coders-tui/`.
+Users can also install via the install script:
+```bash
+curl -fsSL https://raw.githubusercontent.com/Jayphen/coders/go-rewrite/packages/go/install.sh | bash
+```
 
 ### Plugin (`@jayphen/coders`)
 
@@ -55,21 +56,31 @@ Always update both when bumping versions.
 ## Development
 
 ```bash
-pnpm install          # Install dependencies
-pnpm dev:tui          # Run TUI in dev mode
+pnpm install          # Install plugin dependencies
 pnpm plugin:test      # Test the plugin locally
+```
+
+### Go Development
+
+```bash
+cd packages/go
+make build           # Build the binary
+make test            # Run tests
+./coders-tui --help  # Test the CLI
 ```
 
 ## Testing Changes Locally
 
-For plugin changes, you can test without publishing:
+### Plugin Changes
 ```bash
 cd packages/plugin
 node skills/coders/scripts/main.js <command>
 ```
 
-For TUI changes:
+### Go/TUI Changes
 ```bash
-cd packages/tui
-pnpm dev
+cd packages/go
+go build -o coders-tui ./cmd/coders
+./coders-tui spawn claude --task "test task"
+./coders-tui tui  # Launch the TUI
 ```

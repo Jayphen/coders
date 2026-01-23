@@ -9,7 +9,7 @@ This is a monorepo containing:
 | Package | Description | |
 |---------|-------------|---|
 | [`@jayphen/coders`](./packages/plugin) | Claude Code plugin for spawning AI sessions | [Install via Claude](https://github.com/Jayphen/coders#claude-code-plugin-recommended) |
-| [`@jayphen/coders-tui`](./packages/tui) | Terminal UI for managing sessions | [![npm](https://img.shields.io/npm/v/@jayphen/coders-tui)](https://www.npmjs.com/package/@jayphen/coders-tui) |
+| [`coders-tui`](./packages/go) | Go-based CLI and TUI for managing sessions | Built from source |
 
 ## Quick Start
 
@@ -36,11 +36,16 @@ claude plugin install coders@coders
 ### Terminal UI (Optional)
 
 ```bash
-# Install the TUI globally
-npm install -g @jayphen/coders-tui
+# Install the Go-based TUI
+curl -fsSL https://raw.githubusercontent.com/Jayphen/coders/go-rewrite/packages/go/install.sh | bash
+
+# Or build from source
+cd packages/go
+make build
+make install
 
 # Run it
-coders-tui
+coders-tui tui
 ```
 
 ```
@@ -84,41 +89,46 @@ coders/
 │   │   ├── bin/                # CLI wrapper
 │   │   └── package.json
 │   │
-│   └── tui/                    # Terminal UI (distributed separately)
-│       ├── src/
-│       │   ├── components/     # Ink React components
-│       │   └── app.tsx
-│       └── package.json
+│   └── go/                     # Go implementation (TUI, CLI, orchestrator)
+│       ├── cmd/coders/         # Main entry point
+│       ├── internal/           # Internal packages
+│       │   ├── config/         # Configuration management
+│       │   ├── logging/        # Structured logging
+│       │   ├── tmux/           # Tmux integration
+│       │   └── tui/            # Terminal UI (Bubble Tea)
+│       ├── Makefile
+│       └── go.mod
 │
-├── dev/                        # Development only (not distributed)
-│   ├── test/                   # Test files
-│   ├── notes/                  # Dev documentation
-│   └── hooks/                  # Git hooks
-│
-├── package.json                # Workspace root
+├── package.json                # Workspace root (plugin dependencies)
 └── pnpm-workspace.yaml
 ```
 
 ## Development
 
 ```bash
-# Install dependencies
+# Install plugin dependencies
 pnpm install
 
 # Test the plugin locally
 pnpm plugin:test
 
-# Run TUI in dev mode
-pnpm dev:tui
+# Build and test the Go TUI/CLI
+cd packages/go
+make build
+./coders-tui --help
+
+# Run the TUI
+./coders-tui tui
 
 # Run tests
-pnpm test
+make test
 ```
 
 ## Documentation
 
 - [Plugin README](./packages/plugin/README.md) - Full plugin documentation
-- [TUI README](./packages/tui/README.md) - Terminal UI documentation
+- [Go TUI README](./packages/go/README.md) - Go implementation documentation
+- [CLAUDE.md](./CLAUDE.md) - Project guide and deployment instructions
 
 ## License
 

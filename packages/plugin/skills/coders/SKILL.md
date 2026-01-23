@@ -13,7 +13,7 @@ Spawn and manage AI coding assistants in isolated tmux sessions with optional gi
 ### Spawn a new session
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js spawn claude --task "Implement OAuth authentication"
+${CLAUDE_PLUGIN_ROOT}/bin/coders spawn claude --task "Implement OAuth authentication"
 ```
 
 CLI alternative (outside Claude Code):
@@ -24,13 +24,13 @@ CLI alternative (outside Claude Code):
 ### With a git worktree
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js spawn claude --task "Fix login bug" --worktree fix/login-bug
+${CLAUDE_PLUGIN_ROOT}/bin/coders spawn claude --task "Fix login bug" --worktree fix/login-bug
 ```
 
 ### List active sessions
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js list
+${CLAUDE_PLUGIN_ROOT}/bin/coders list
 ```
 
 ### Attach to a session

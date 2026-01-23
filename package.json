@@ -2,13 +2,11 @@
   "name": "coders-monorepo",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/plugin"
   ],
   "scripts": {
     "test": "vitest",
     "test:plugin": "vitest --project plugin",
-    "dev:tui": "pnpm --filter @jayphen/coders-tui dev",
-    "build": "pnpm -r build",
     "plugin:test": "claude --plugin-dir packages/plugin"
   },
   "devDependencies": {
