@@ -21,6 +21,10 @@ const (
 	HealthKeyPrefix = "coders:health:"
 	// HealthSummaryKey is the Redis key for the health check summary.
 	HealthSummaryKey = "coders:health:summary"
+	// SessionStateKeyPrefix is the Redis key prefix for session state (for restart-on-crash).
+	SessionStateKeyPrefix = "coders:session-state:"
+	// CrashEventKeyPrefix is the Redis key prefix for crash events.
+	CrashEventKeyPrefix = "coders:crash:"
 )
 
 // Client wraps a Redis client with coders-specific operations.
@@ -316,4 +320,78 @@ func (c *Client) SetHealthSummary(ctx context.Context, summary *types.HealthChec
 func (c *Client) DeleteHealthCheck(ctx context.Context, sessionID string) error {
 	key := HealthKeyPrefix + sessionID
 	return c.rdb.Del(ctx, key).Err()
+}
+
+// SetSessionState stores session state for restart-on-crash functionality.
+func (c *Client) SetSessionState(ctx context.Context, state *types.SessionState) error {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+
+	key := SessionStateKeyPrefix + state.SessionID
+	// Session state expires after 24 hours (sessions shouldn't run longer than this)
+	return c.rdb.Set(ctx, key, data, 24*time.Hour).Err()
+}
+
+// GetSessionState retrieves session state for a given session ID.
+func (c *Client) GetSessionState(ctx context.Context, sessionID string) (*types.SessionState, error) {
+	key := SessionStateKeyPrefix + sessionID
+	data, err := c.rdb.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var state types.SessionState
+	if err := json.Unmarshal([]byte(data), &state); err != nil {
+		return nil, err
+	}
+
+	return &state, nil
+}
+
+// DeleteSessionState removes session state for a given session ID.
+func (c *Client) DeleteSessionState(ctx context.Context, sessionID string) error {
+	key := SessionStateKeyPrefix + sessionID
+	return c.rdb.Del(ctx, key).Err()
+}
+
+// RecordCrashEvent stores a crash event for a session.
+func (c *Client) RecordCrashEvent(ctx context.Context, event *types.CrashEvent) error {
+	data, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	// Use a list to store crash history, keep last 10 events per session
+	key := CrashEventKeyPrefix + event.SessionID
+	pipe := c.rdb.Pipeline()
+	pipe.LPush(ctx, key, data)
+	pipe.LTrim(ctx, key, 0, 9)
+	pipe.Expire(ctx, key, 24*time.Hour)
+	_, err = pipe.Exec(ctx)
+	return err
+}
+
+// GetCrashEvents retrieves crash events for a session.
+func (c *Client) GetCrashEvents(ctx context.Context, sessionID string) ([]types.CrashEvent, error) {
+	key := CrashEventKeyPrefix + sessionID
+	data, err := c.rdb.LRange(ctx, key, 0, -1).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	var events []types.CrashEvent
+	for _, item := range data {
+		var event types.CrashEvent
+		if err := json.Unmarshal([]byte(item), &event); err != nil {
+			continue
+		}
+		events = append(events, event)
+	}
+
+	return events, nil
 }

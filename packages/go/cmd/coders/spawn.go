@@ -16,13 +16,15 @@ import (
 )
 
 var (
-	spawnTool      string
-	spawnTask      string
-	spawnCwd       string
-	spawnModel     string
-	spawnHeartbeat bool
-	spawnAttach    bool
-	spawnOllama    bool
+	spawnTool           string
+	spawnTask           string
+	spawnCwd            string
+	spawnModel          string
+	spawnHeartbeat      bool
+	spawnAttach         bool
+	spawnOllama         bool
+	spawnRestartOnCrash bool
+	spawnMaxRestarts    int
 )
 
 func newSpawnCmd() *cobra.Command {
@@ -48,7 +50,14 @@ Examples:
   coders spawn claude --task "Fix the login bug"
   coders spawn gemini --task "Add unit tests" --cwd ~/projects/myapp
   coders spawn codex --task "Refactor auth module" --model gpt-4
-  coders spawn --attach  # Spawn and attach immediately`,
+  coders spawn --attach  # Spawn and attach immediately
+  coders spawn --restart-on-crash --task "Long running task"  # Auto-restart on crash
+
+Crash Recovery:
+  With --restart-on-crash, the session will automatically restart if the CLI
+  process crashes or dies unexpectedly. Session state is stored in Redis so
+  it can be restored with the same task/prompt. Use --max-restarts to limit
+  the number of automatic restarts (default: 3).`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runSpawn,
 	}
@@ -60,6 +69,8 @@ Examples:
 	cmd.Flags().BoolVar(&spawnHeartbeat, "heartbeat", defaultHeartbeat, "Enable heartbeat monitoring")
 	cmd.Flags().BoolVarP(&spawnAttach, "attach", "a", false, "Attach to session after spawning")
 	cmd.Flags().BoolVar(&spawnOllama, "ollama", false, "Use Ollama backend (requires CODERS_OLLAMA_BASE_URL and CODERS_OLLAMA_AUTH_TOKEN)")
+	cmd.Flags().BoolVar(&spawnRestartOnCrash, "restart-on-crash", false, "Automatically restart session if it crashes (requires Redis)")
+	cmd.Flags().IntVar(&spawnMaxRestarts, "max-restarts", 3, "Maximum number of automatic restarts (default: 3)")
 
 	return cmd
 }
@@ -177,6 +188,20 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 			fmt.Printf("\033[33m⚠️  Failed to start heartbeat: %v\033[0m\n", err)
 		} else {
 			fmt.Printf("\033[32m💓 Heartbeat enabled\033[0m\n")
+		}
+	}
+
+	// Store session state and start crash watcher if enabled
+	if spawnRestartOnCrash {
+		if err := storeSessionState(sessionID, sessionName, tool, spawnTask, cwd, spawnModel, spawnOllama, spawnHeartbeat, true, spawnMaxRestarts); err != nil {
+			fmt.Printf("\033[33m⚠️  Failed to store session state for crash recovery: %v\033[0m\n", err)
+			fmt.Printf("\033[33m   Crash recovery will not be available for this session.\033[0m\n")
+		} else {
+			if err := startCrashWatcher(sessionID); err != nil {
+				fmt.Printf("\033[33m⚠️  Failed to start crash watcher: %v\033[0m\n", err)
+			} else {
+				fmt.Printf("\033[32m🔄 Crash recovery enabled (max %d restarts)\033[0m\n", spawnMaxRestarts)
+			}
 		}
 	}
 

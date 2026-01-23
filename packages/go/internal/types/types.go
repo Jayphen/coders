@@ -128,3 +128,28 @@ var ToolColors = map[string]string{
 	"opencode": "yellow",
 	"unknown":  "gray",
 }
+
+// SessionState stores the state needed to restart a crashed session.
+type SessionState struct {
+	SessionID       string `json:"sessionId"`
+	SessionName     string `json:"sessionName"`
+	Tool            string `json:"tool"`
+	Task            string `json:"task"`
+	Cwd             string `json:"cwd"`
+	Model           string `json:"model,omitempty"`
+	UseOllama       bool   `json:"useOllama,omitempty"`
+	HeartbeatEnabled bool   `json:"heartbeatEnabled"`
+	RestartOnCrash  bool   `json:"restartOnCrash"`
+	RestartCount    int    `json:"restartCount"`
+	MaxRestarts     int    `json:"maxRestarts"`
+	CreatedAt       int64  `json:"createdAt"`
+	LastRestartAt   int64  `json:"lastRestartAt,omitempty"`
+}
+
+// CrashEvent records when a session crashed.
+type CrashEvent struct {
+	SessionID   string `json:"sessionId"`
+	Timestamp   int64  `json:"timestamp"`
+	Reason      string `json:"reason"`
+	WillRestart bool   `json:"willRestart"`
+}
