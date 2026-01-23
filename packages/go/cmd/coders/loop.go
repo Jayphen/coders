@@ -359,14 +359,16 @@ func markTaskComplete(filePath, taskDescription string) error {
 
 // spawnLoopTask spawns a coder session for a task
 func spawnLoopTask(task string, index, total int, tool, cwd string) (string, error) {
-	sessionName := fmt.Sprintf("%s-loop-task-%d", tool, index+1)
+	// Build the task description with completion instructions
+	fullTask := fmt.Sprintf("%s. When complete, commit changes and push to GitHub, then publish a completion promise.", task)
+
+	// Generate the session name using the same logic as spawn command
+	// This ensures we wait for the correct promise
+	sessionName := generateSessionName(tool, fullTask)
 
 	fmt.Printf("\n\033[34m🚀 Spawning task %d/%d\033[0m\n", index+1, total)
 	fmt.Printf("   📝 Task: %s\n", task)
 	fmt.Printf("   🤖 Tool: %s\n", tool)
-
-	// Build the task description with completion instructions
-	fullTask := fmt.Sprintf("%s. When complete, commit changes and push to GitHub, then publish a completion promise.", task)
 
 	// Build spawn command args
 	exe, err := os.Executable()
