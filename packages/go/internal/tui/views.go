@@ -3,12 +3,19 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/Jayphen/coders/internal/tmux"
 	"github.com/Jayphen/coders/internal/types"
+)
+
+// widthCache caches ANSI-aware width calculations to avoid repeated lipgloss.Width calls.
+var (
+	widthCache   = make(map[string]int)
+	widthCacheMu sync.RWMutex
 )
 
 // renderHeader renders the application header.
@@ -316,8 +323,21 @@ func (m Model) renderSessionRow(index int) string {
 }
 
 // padRight pads a string to the specified visible width.
+// Uses a cache to avoid repeated ANSI-aware width calculations.
 func padRight(s string, width int) string {
-	visibleWidth := lipgloss.Width(s)
+	// Check cache first
+	widthCacheMu.RLock()
+	visibleWidth, cached := widthCache[s]
+	widthCacheMu.RUnlock()
+
+	if !cached {
+		// Calculate and cache the width
+		visibleWidth = lipgloss.Width(s)
+		widthCacheMu.Lock()
+		widthCache[s] = visibleWidth
+		widthCacheMu.Unlock()
+	}
+
 	if visibleWidth >= width {
 		return s
 	}
