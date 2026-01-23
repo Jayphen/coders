@@ -301,3 +301,15 @@ func CreateSession(name, cwd, command string) error {
 func SendKeys(sessionName, keys string) error {
 	return exec.Command("tmux", "send-keys", "-t", sessionName, keys, "Enter").Run()
 }
+
+// CapturePane returns the last N lines of output from a session's active pane.
+func CapturePane(sessionName string, lines int) (string, error) {
+	if lines <= 0 {
+		lines = 30
+	}
+	out, err := exec.Command("tmux", "capture-pane", "-t", sessionName, "-p", "-e", "-S", fmt.Sprintf("-%d", lines)).Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimRight(string(out), "\n"), nil
+}

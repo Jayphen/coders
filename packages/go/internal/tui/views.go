@@ -74,8 +74,8 @@ func (m Model) renderSessionList() string {
 
 	var b strings.Builder
 
-	// Column headers (widths match row: 3 + 26 + 12 + 22 + status)
-	headers := fmt.Sprintf(" %-3s%-26s%-12s%-22s%s",
+	// Column headers (widths match row: 3 + 24 + 10 + 24 + status)
+	headers := fmt.Sprintf(" %-3s%-24s%-10s%-24s%s",
 		"", "SESSION", "TOOL", "TASK/SUMMARY", "STATUS")
 	b.WriteString(DimStyle.Bold(true).Render(headers))
 	b.WriteString("\n")
@@ -116,6 +116,90 @@ func (m Model) renderSessionList() string {
 	return b.String()
 }
 
+// renderMainContent renders the split view (session list + detail/preview panel).
+func (m Model) renderMainContent(maxHeight int) string {
+	list := m.renderSessionList()
+	availableWidth := m.contentWidth()
+
+	if availableWidth == 0 {
+		if maxHeight > 0 {
+			listHeight := maxHeight
+			rightHeight := 0
+			if listHeight > 2 {
+				rightHeight = listHeight / 2
+				listHeight = listHeight - rightHeight - 1
+			}
+			if listHeight < 1 {
+				listHeight = 1
+			}
+			list = truncateLines(list, listHeight, DimStyle.Render("..."))
+			if rightHeight <= 0 {
+				return list
+			}
+			right := m.renderRightPanel(0, rightHeight)
+			if right == "" {
+				return list
+			}
+			return list + "\n" + right
+		}
+		right := m.renderRightPanel(0, maxHeight)
+		return list + "\n" + right
+	}
+
+	const (
+		gap      = 2
+		minLeft  = 64
+		minRight = 32
+	)
+
+	if availableWidth < minLeft+minRight+gap {
+		if maxHeight > 0 {
+			listHeight := maxHeight
+			rightHeight := 0
+			if listHeight > 2 {
+				rightHeight = listHeight / 2
+				listHeight = listHeight - rightHeight - 1
+			}
+			if listHeight < 1 {
+				listHeight = 1
+			}
+			list = truncateLines(list, listHeight, DimStyle.Render("..."))
+			if rightHeight <= 0 {
+				return list
+			}
+			right := m.renderRightPanel(availableWidth, rightHeight)
+			if right == "" {
+				return list
+			}
+			return list + "\n" + right
+		}
+		right := m.renderRightPanel(availableWidth, maxHeight)
+		return list + "\n" + right
+	}
+
+	leftWidth := minLeft
+	rightWidth := availableWidth - leftWidth - gap
+
+	if maxHeight > 0 {
+		list = truncateLines(list, maxHeight, DimStyle.Render("..."))
+	}
+	left := lipgloss.NewStyle().Width(leftWidth).Render(list)
+	right := m.renderRightPanel(rightWidth, maxHeight)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, strings.Repeat(" ", gap), right)
+}
+
+func (m Model) contentWidth() int {
+	if m.width <= 0 {
+		return 0
+	}
+	width := m.width - 2
+	if width < 0 {
+		return 0
+	}
+	return width
+}
+
 // renderSessionRow renders a single session row.
 func (m Model) renderSessionRow(index int) string {
 	s := m.sessions[index]
@@ -153,9 +237,9 @@ func (m Model) renderSessionRow(index int) string {
 	}
 
 	// Truncate name
-	maxNameLen := 22
+	maxNameLen := 20
 	if s.IsOrchestrator {
-		maxNameLen = 24
+		maxNameLen = 22
 	}
 	if len(displayName) > maxNameLen {
 		displayName = displayName[:maxNameLen-3] + "..."
@@ -177,8 +261,8 @@ func (m Model) renderSessionRow(index int) string {
 	if displayText == "" {
 		displayText = "-"
 	}
-	if len(displayText) > 18 {
-		displayText = displayText[:15] + "..."
+	if len(displayText) > 20 {
+		displayText = displayText[:17] + "..."
 	}
 	taskStyle := lipgloss.NewStyle()
 	if s.HasPromise || displayText == "-" {
@@ -218,9 +302,9 @@ func (m Model) renderSessionRow(index int) string {
 
 	// Format row with fixed widths using lipgloss padding
 	// (fmt.Sprintf doesn't work with ANSI-styled strings)
-	namePadded := padRight(namePart, 26)
-	toolPadded := padRight(toolPart, 12)
-	taskPadded := padRight(taskPart, 22)
+	namePadded := padRight(namePart, 24)
+	toolPadded := padRight(toolPart, 10)
+	taskPadded := padRight(taskPart, 24)
 
 	return selector + namePadded + toolPadded + taskPadded + statusPart
 }
@@ -234,8 +318,38 @@ func padRight(s string, width int) string {
 	return s + strings.Repeat(" ", width-visibleWidth)
 }
 
+func truncateLines(s string, maxLines int, suffix string) string {
+	if maxLines <= 0 {
+		return ""
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) <= maxLines {
+		return s
+	}
+	if suffix != "" {
+		if maxLines == 1 {
+			return suffix
+		}
+		lines = lines[:maxLines-1]
+		lines = append(lines, suffix)
+		return strings.Join(lines, "\n")
+	}
+	return strings.Join(lines[:maxLines], "\n")
+}
+
+func tailLines(s string, maxLines int) string {
+	if maxLines <= 0 {
+		return ""
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) <= maxLines {
+		return s
+	}
+	return strings.Join(lines[len(lines)-maxLines:], "\n")
+}
+
 // renderSessionDetail renders the detail panel for the selected session.
-func (m Model) renderSessionDetail() string {
+func (m Model) renderSessionDetail(width int) string {
 	s := m.selectedSession()
 	if s == nil {
 		return ""
@@ -353,8 +467,114 @@ func (m Model) renderSessionDetail() string {
 		BorderForeground(ColorGray).
 		Padding(1, 2).
 		MarginTop(1)
+	if width > 0 {
+		style = style.Width(width)
+	}
 
 	return style.Render(b.String())
+}
+
+// renderRightPanel renders the detail panel and preview panel.
+func (m Model) renderRightPanel(width int, maxHeight int) string {
+	detail := m.renderSessionDetail(width)
+	if maxHeight > 0 {
+		detail = truncateLines(detail, maxHeight, "")
+	}
+	detailHeight := lipgloss.Height(detail)
+
+	previewHeight := 0
+	if maxHeight > 0 {
+		previewHeight = maxHeight - detailHeight
+	}
+
+	preview := m.renderSessionPreview(width, previewHeight)
+	if preview == "" {
+		return detail
+	}
+	return lipgloss.JoinVertical(lipgloss.Top, detail, preview)
+}
+
+// renderSessionPreview renders a live preview of the selected session output.
+func (m Model) renderSessionPreview(width int, maxHeight int) string {
+	s := m.selectedSession()
+	title := "Preview"
+	if s != nil {
+		displayName := s.Name
+		if s.IsOrchestrator {
+			displayName = "orchestrator"
+		} else {
+			displayName = strings.TrimPrefix(s.Name, tmux.SessionPrefix)
+		}
+		title = "Preview: " + displayName
+	}
+
+	content := m.preview
+	if m.previewLoading {
+		if strings.TrimSpace(content) == "" {
+			content = DimStyle.Render("Loading preview...")
+		} else {
+			content = content + "\n" + DimStyle.Render("(updating...)")
+		}
+	} else if m.previewErr != nil {
+		content = ErrorStyle.Render("Preview unavailable")
+	} else if strings.TrimSpace(content) == "" {
+		content = DimStyle.Render("No output yet")
+	}
+
+	borderColor := ColorBlue
+	headerStyle := BoldStyle
+	inputLabelStyle := DimStyle
+	if m.previewFocus {
+		borderColor = ColorCyan
+		headerStyle = lipgloss.NewStyle().Bold(true).Foreground(ColorCyan)
+		inputLabelStyle = HelpKeyStyle
+	}
+
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Padding(1, 2).
+		MarginTop(1)
+	if width > 0 {
+		style = style.Width(width)
+	}
+
+	header := headerStyle.Render(title)
+	inputModel := m.previewInput
+	if width > 0 {
+		const (
+			borderWidth     = 2
+			paddingWidth    = 4
+			minInputWidth   = 10
+			inputLabelWidth = 6
+		)
+		inputWidth := width - borderWidth - paddingWidth - inputLabelWidth
+		if inputWidth < minInputWidth {
+			inputWidth = minInputWidth
+		}
+		inputModel.Width = inputWidth
+	}
+	inputLine := inputLabelStyle.Render("Send: ") + inputModel.View()
+	if maxHeight > 0 {
+		const (
+			previewMarginTop = 1
+			previewBorder    = 2
+			previewPadding   = 2
+			previewHeader    = 1
+			previewHeaderGap = 1
+			previewInputGap  = 1
+			previewInputLine = 1
+			minContentLines  = 0
+		)
+		overhead := previewMarginTop + previewBorder + previewPadding + previewHeader + previewHeaderGap + previewInputGap + previewInputLine
+		maxContentLines := maxHeight - overhead
+		if maxContentLines < minContentLines {
+			return ""
+		}
+		content = tailLines(content, maxContentLines)
+	}
+
+	return style.Render(header + "\n\n" + content + "\n\n" + inputLine)
 }
 
 // renderDetailRow renders a label: value row in the detail panel.
@@ -384,6 +604,7 @@ func (m Model) renderStatusBar() string {
 	// Help text
 	help := []string{
 		HelpKeyStyle.Render("↑↓/jk") + " nav",
+		HelpKeyStyle.Render("tab") + " focus",
 		HelpKeyStyle.Render("a/↵") + " attach",
 		HelpKeyStyle.Render("s") + " spawn",
 		HelpKeyStyle.Render("K") + " kill",

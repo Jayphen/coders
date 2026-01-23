@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"sort"
 	"strings"
@@ -21,20 +23,27 @@ import (
 // Model is the Bubbletea model for the TUI.
 type Model struct {
 	// Data
-	sessions      []types.Session
-	selectedIndex int
+	sessions       []types.Session
+	selectedIndex  int
+	preview        string
+	previewSession string
+	previewErr     error
+	previewLoading bool
+	previewLines   int
+	previewFocus   bool
+	previewInput   textinput.Model
 
 	// UI state
-	loading        bool
-	err            error
-	statusMessage  string
-	statusExpiry   time.Time
-	confirmKill    bool
-	spawnMode      bool
-	spawnInput     textinput.Model
-	spawning       bool
-	width, height  int
-	version        string
+	loading       bool
+	err           error
+	statusMessage string
+	statusExpiry  time.Time
+	confirmKill   bool
+	spawnMode     bool
+	spawnInput    textinput.Model
+	spawning      bool
+	width, height int
+	version       string
 
 	// Components
 	spinner spinner.Model
@@ -45,12 +54,19 @@ type Model struct {
 
 // Messages
 type (
-	sessionsMsg       []types.Session
-	errMsg            error
-	tickMsg           time.Time
-	statusClearMsg    struct{}
-	spawnCompleteMsg  struct{ err error }
+	sessionsMsg      []types.Session
+	errMsg           error
+	tickMsg          time.Time
+	statusClearMsg   struct{}
+	spawnCompleteMsg struct{ err error }
+	previewMsg       struct {
+		session string
+		output  string
+		err     error
+	}
 )
+
+const defaultPreviewLines = 30
 
 // NewModel creates a new TUI model.
 func NewModel(version string) Model {
@@ -63,11 +79,20 @@ func NewModel(version string) Model {
 	ti.CharLimit = 500
 	ti.Width = 60
 
+	pi := textinput.New()
+	pi.Placeholder = "Type a message..."
+	pi.CharLimit = 2000
+	pi.Width = 60
+	pi.Prompt = ""
+	pi.Blur()
+
 	return Model{
-		version:  version,
-		loading:  true,
-		spinner:  s,
-		spawnInput: ti,
+		version:      version,
+		loading:      true,
+		spinner:      s,
+		spawnInput:   ti,
+		previewLines: defaultPreviewLines,
+		previewInput: pi,
 	}
 }
 
@@ -100,6 +125,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.selectedIndex >= len(m.sessions) && len(m.sessions) > 0 {
 			m.selectedIndex = len(m.sessions) - 1
 		}
+		if len(m.sessions) == 0 {
+			m.preview = ""
+			m.previewSession = ""
+			m.previewErr = nil
+			m.previewLoading = false
+			return m, nil
+		}
+		if m.selectedIndex >= 0 && m.selectedIndex < len(m.sessions) {
+			if m.previewSession != m.sessions[m.selectedIndex].Name {
+				return m.startPreviewFetch()
+			}
+		}
 		return m, nil
 
 	case errMsg:
@@ -108,7 +145,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		return m, tea.Batch(m.fetchSessions, m.tick())
+		var previewCmd tea.Cmd
+		m, previewCmd = m.startPreviewFetch()
+		return m, tea.Batch(m.fetchSessions, previewCmd, m.tick())
 
 	case statusClearMsg:
 		if time.Now().After(m.statusExpiry) {
@@ -125,16 +164,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.fetchSessions
 
+	case previewMsg:
+		if msg.session != m.previewSession {
+			return m, nil
+		}
+		m.previewLoading = false
+		if msg.err != nil {
+			m.previewErr = msg.err
+			m.preview = ""
+		} else {
+			m.previewErr = nil
+			m.preview = msg.output
+		}
+		return m, nil
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 
-	// Update text input if in spawn mode
+	// Update text inputs for non-key messages (e.g. cursor blink).
 	if m.spawnMode {
 		var cmd tea.Cmd
 		m.spawnInput, cmd = m.spawnInput.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+	if m.previewFocus {
+		var cmd tea.Cmd
+		m.previewInput, cmd = m.previewInput.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 
@@ -163,7 +221,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("Spawning session...")
 			return m, m.spawnSession(value)
 		}
-		return m, nil
+		var cmd tea.Cmd
+		m.spawnInput, cmd = m.spawnInput.Update(msg)
+		return m, cmd
 	}
 
 	// Handle confirmation dialog
@@ -180,8 +240,45 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Handle preview input focus
+	if m.previewFocus {
+		switch msg.String() {
+		case "tab":
+			m.previewFocus = false
+			m.previewInput.Blur()
+			return m, nil
+		case "enter":
+			text := strings.TrimSpace(m.previewInput.Value())
+			if text == "" {
+				return m, nil
+			}
+			s := m.selectedSession()
+			if s == nil {
+				m.setStatus("No session selected")
+				return m, nil
+			}
+			if err := tmux.SendKeys(s.Name, text); err != nil {
+				m.setStatus(fmt.Sprintf("Send failed: %v", err))
+			} else {
+				m.setStatus("Sent to session")
+			}
+			m.previewInput.SetValue("")
+			return m, nil
+		case "ctrl+c":
+			return m, tea.Quit
+		}
+		var cmd tea.Cmd
+		m.previewInput, cmd = m.previewInput.Update(msg)
+		return m, cmd
+	}
+
 	// Normal mode key handling
 	switch msg.String() {
+	case "tab":
+		m.previewFocus = true
+		m.previewInput.Focus()
+		return m, textinput.Blink
+
 	case "q", "ctrl+c":
 		// If there's an orchestrator session, switch to it
 		var orchestrator *types.Session
@@ -207,13 +304,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.selectedIndex > 0 {
 			m.selectedIndex--
 		}
-		return m, nil
+		return m.startPreviewFetch()
 
 	case "down", "j":
 		if m.selectedIndex < len(m.sessions)-1 {
 			m.selectedIndex++
 		}
-		return m, nil
+		return m.startPreviewFetch()
 
 	case "enter", "a":
 		if len(m.sessions) > 0 && m.selectedIndex < len(m.sessions) {
@@ -228,6 +325,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.spawnMode = true
+		m.previewFocus = false
+		m.previewInput.Blur()
 		m.spawnInput.Focus()
 		return m, textinput.Blink
 
@@ -277,35 +376,62 @@ func (m Model) View() string {
 	var b strings.Builder
 
 	// Header
-	b.WriteString(m.renderHeader())
-	b.WriteString("\n")
+	header := m.renderHeader()
+	b.WriteString(header)
+	b.WriteString("\n\n")
 
 	// Confirmation dialog
 	if m.confirmKill {
-		b.WriteString(m.renderConfirmDialog())
+		confirm := m.renderConfirmDialog()
+		b.WriteString(confirm)
 		b.WriteString("\n")
 	}
 
 	// Spawn prompt
 	if m.spawnMode {
-		b.WriteString(m.renderSpawnPrompt())
+		spawn := m.renderSpawnPrompt()
+		b.WriteString(spawn)
 		b.WriteString("\n")
 	}
 
 	// Status message
 	if m.statusMessage != "" && !m.confirmKill {
-		b.WriteString(StatusMsgStyle.Render(m.statusMessage))
+		status := StatusMsgStyle.Render(m.statusMessage)
+		b.WriteString(status)
 		b.WriteString("\n\n")
+	}
+
+	contentHeight := 0
+	if m.height > 0 {
+		innerHeight := m.height - 2 // outer padding
+		usedHeight := lipgloss.Height(header) + 1
+		if m.confirmKill {
+			usedHeight += lipgloss.Height(m.renderConfirmDialog()) + 1
+		}
+		if m.spawnMode {
+			usedHeight += lipgloss.Height(m.renderSpawnPrompt()) + 1
+		}
+		if m.statusMessage != "" && !m.confirmKill {
+			usedHeight += lipgloss.Height(StatusMsgStyle.Render(m.statusMessage)) + 2
+		}
+		statusBar := m.renderStatusBar()
+		usedHeight += 1 + lipgloss.Height(statusBar)
+		contentHeight = innerHeight - usedHeight
+		if contentHeight < 1 {
+			contentHeight = 1
+		}
 	}
 
 	// Error or content
 	if m.err != nil {
-		b.WriteString(ErrorStyle.Render(fmt.Sprintf("Error: %v", m.err)))
+		errLine := ErrorStyle.Render(fmt.Sprintf("Error: %v", m.err))
+		if contentHeight > 0 {
+			errLine = truncateLines(errLine, contentHeight, "")
+		}
+		b.WriteString(errLine)
 		b.WriteString("\n")
 	} else {
-		b.WriteString(m.renderSessionList())
-		b.WriteString("\n")
-		b.WriteString(m.renderSessionDetail())
+		b.WriteString(m.renderMainContent(contentHeight))
 	}
 
 	// Status bar
@@ -337,6 +463,24 @@ func (m Model) selectedSession() *types.Session {
 		return &m.sessions[m.selectedIndex]
 	}
 	return nil
+}
+
+func (m Model) startPreviewFetch() (Model, tea.Cmd) {
+	s := m.selectedSession()
+	if s == nil {
+		m.previewSession = ""
+		m.preview = ""
+		m.previewErr = nil
+		m.previewLoading = false
+		return m, nil
+	}
+	lines := m.previewLines
+	if lines <= 0 {
+		lines = defaultPreviewLines
+	}
+	m.previewLoading = true
+	m.previewSession = s.Name
+	return m, m.fetchPreview(s.Name, lines)
 }
 
 // Commands
@@ -428,10 +572,39 @@ func (m Model) fetchSessions() tea.Msg {
 	return sessionsMsg(sessions)
 }
 
+func (m Model) fetchPreview(sessionName string, lines int) tea.Cmd {
+	return func() tea.Msg {
+		output, err := tmux.CapturePane(sessionName, lines)
+		return previewMsg{session: sessionName, output: output, err: err}
+	}
+}
+
 func (m Model) spawnSession(args string) tea.Cmd {
 	return func() tea.Msg {
-		// TODO: Implement spawn via coders CLI
-		// For now, just return success
+		exe, err := os.Executable()
+		if err != nil {
+			return spawnCompleteMsg{err: err}
+		}
+
+		parsedArgs, err := parseSpawnArgs(args)
+		if err != nil {
+			return spawnCompleteMsg{err: err}
+		}
+		if len(parsedArgs) == 0 {
+			return spawnCompleteMsg{err: fmt.Errorf("no spawn arguments provided")}
+		}
+
+		cmd := exec.Command(exe, append([]string{"spawn"}, parsedArgs...)...)
+		var output bytes.Buffer
+		cmd.Stdout = &output
+		cmd.Stderr = &output
+		if err := cmd.Run(); err != nil {
+			msg := strings.TrimSpace(output.String())
+			if msg != "" {
+				return spawnCompleteMsg{err: fmt.Errorf("%w: %s", err, msg)}
+			}
+			return spawnCompleteMsg{err: err}
+		}
 		return spawnCompleteMsg{err: nil}
 	}
 }
@@ -452,4 +625,46 @@ func (m Model) killCompletedSessions() tea.Cmd {
 		m.setStatus(fmt.Sprintf("Killed %d completed session(s)", killed))
 		return nil
 	}
+}
+
+func parseSpawnArgs(input string) ([]string, error) {
+	var args []string
+	var b strings.Builder
+	inSingle := false
+	inDouble := false
+	escaped := false
+
+	flush := func() {
+		if b.Len() > 0 {
+			args = append(args, b.String())
+			b.Reset()
+		}
+	}
+
+	for _, r := range input {
+		switch {
+		case escaped:
+			b.WriteRune(r)
+			escaped = false
+		case r == '\\' && !inSingle:
+			escaped = true
+		case r == '\'' && !inDouble:
+			inSingle = !inSingle
+		case r == '"' && !inSingle:
+			inDouble = !inDouble
+		case (r == ' ' || r == '\t' || r == '\n') && !inSingle && !inDouble:
+			flush()
+		default:
+			b.WriteRune(r)
+		}
+	}
+
+	if escaped {
+		b.WriteRune('\\')
+	}
+	if inSingle || inDouble {
+		return nil, fmt.Errorf("unterminated quote in spawn arguments")
+	}
+	flush()
+	return args, nil
 }
