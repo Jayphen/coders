@@ -17,6 +17,8 @@ const (
 	SessionPrefix = "coder-"
 	// TUISession is the name of the TUI's own tmux session.
 	TUISession = "coders-tui"
+	// OrchestratorSession is the name of the orchestrator session.
+	OrchestratorSession = "coder-orchestrator"
 )
 
 // IsInsideTmux returns true if we're running inside a tmux session.

@@ -84,6 +84,8 @@ Migration of TUI + CLI from TypeScript/Node.js to Go for improved performance an
 - [x] `coders resume` - Resume completed session
 - [x] `coders tui` - Launch TUI
 - [x] `coders version` - Show version
+- [x] `coders init` - Initialize orchestrator + TUI, attach to orchestrator
+- [x] `coders orchestrator` - Start or attach to orchestrator session
 
 ### Spawn Features
 - [x] Tool selection (claude, gemini, codex, opencode)

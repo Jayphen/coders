@@ -23,6 +23,8 @@ running various AI coding tools like Claude, Gemini, Codex, and OpenCode.`,
 
 	// Add subcommands
 	rootCmd.AddCommand(
+		newInitCmd(),
+		newOrchestratorCmd(),
 		newSpawnCmd(),
 		newListCmd(),
 		newAttachCmd(),
