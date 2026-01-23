@@ -231,6 +231,9 @@ func executeLoop(todolistPath, cwdPath string) error {
 
 	fmt.Printf("📋 Found %d uncompleted tasks\n\n", len(tasks))
 
+	currentTool := loopTool
+	completedCount := 0
+
 	// Set up signal handling for graceful shutdown (after tasks are parsed)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -242,8 +245,8 @@ func executeLoop(todolistPath, cwdPath string) error {
 			LoopID: loopID,
 			Status: "paused",
 		})
-		// Send notification about paused loop
-		if err := notifyLoopComplete(loopID, len(tasks), "paused"); err != nil {
+		// Send notification about paused loop with actual completed count
+		if err := notifyLoopComplete(loopID, completedCount, "paused"); err != nil {
 			log.WithError(err).Warn("failed to send loop notification")
 		}
 		cancel()
@@ -253,8 +256,6 @@ func executeLoop(todolistPath, cwdPath string) error {
 		fmt.Println("\033[32m✅ All tasks already completed!\033[0m")
 		return nil
 	}
-
-	currentTool := loopTool
 
 	// Execute tasks sequentially
 	for i, task := range tasks {
@@ -282,6 +283,9 @@ func executeLoop(todolistPath, cwdPath string) error {
 		sessionName, err := spawnLoopTask(task, i, len(tasks), currentTool, cwdPath)
 		if err != nil {
 			fmt.Printf("\033[31m❌ Failed to spawn task: %v\033[0m\n", err)
+			if err := notifyLoopComplete(loopID, completedCount, "failed"); err != nil {
+				log.WithError(err).Warn("failed to send loop notification")
+			}
 			break
 		}
 
@@ -292,6 +296,9 @@ func executeLoop(todolistPath, cwdPath string) error {
 				return nil // Cancelled
 			}
 			fmt.Printf("\033[31m❌ Failed waiting for promise: %v\033[0m\n", err)
+			if err := notifyLoopComplete(loopID, completedCount, "failed"); err != nil {
+				log.WithError(err).Warn("failed to send loop notification")
+			}
 			break
 		}
 
@@ -300,6 +307,9 @@ func executeLoop(todolistPath, cwdPath string) error {
 			fmt.Printf("\n\033[33m🚫 Task blocked: %s\033[0m\n", promise.Summary)
 			if loopStopOnBlocked {
 				fmt.Println("\033[33m⏸️  Stopping loop (--stop-on-blocked enabled)\033[0m")
+				if err := notifyLoopComplete(loopID, completedCount, "blocked"); err != nil {
+					log.WithError(err).Warn("failed to send loop notification")
+				}
 				break
 			}
 			fmt.Println("\033[33m⚠️  Continuing despite blocked status...\033[0m")
@@ -309,6 +319,7 @@ func executeLoop(todolistPath, cwdPath string) error {
 		if err := markTaskComplete(todolistPath, task); err != nil {
 			log.WithError(err).Warn("failed to mark task complete")
 		}
+		completedCount++
 		fmt.Printf("\033[32m✅ Task %d/%d completed\033[0m\n", i+1, len(tasks))
 
 		// Check for usage warning and switch tools if needed
@@ -327,13 +338,13 @@ func executeLoop(todolistPath, cwdPath string) error {
 		LoopID:           loopID,
 		TodolistPath:     todolistPath,
 		Cwd:              cwdPath,
-		CurrentTaskIndex: len(tasks),
+		CurrentTaskIndex: completedCount,
 		TotalTasks:       len(tasks),
 		Status:           "completed",
 	})
 
-	// Send notification about completed loop
-	if err := notifyLoopComplete(loopID, len(tasks), "completed"); err != nil {
+	// Send notification about completed loop with actual completed count
+	if err := notifyLoopComplete(loopID, completedCount, "completed"); err != nil {
 		log.WithError(err).Warn("failed to send loop notification")
 	}
 
