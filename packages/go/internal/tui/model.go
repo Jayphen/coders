@@ -111,6 +111,7 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
 		m.fetchSessions,
+		m.fetchRedisData(), // Non-blocking Redis initialization
 		m.tick(),
 	)
 }
@@ -190,6 +191,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Cache split lines to avoid re-splitting on every render
 			m.previewSplitLines = strings.Split(msg.output, "\n")
 			m.previewSplitText = msg.output
+		}
+		return m, nil
+
+	case redisDataMsg:
+		// Store the Redis client if it was just initialized
+		if msg.client != nil && m.redisClient == nil {
+			m.redisClient = msg.client
+		}
+		// Enrich current sessions with Redis data
+		if len(m.sessions) > 0 && (msg.promises != nil || msg.heartbeats != nil || msg.healthChecks != nil) {
+			enrichSessionsWithRedisData(m.sessions, msg.promises, msg.heartbeats, msg.healthChecks)
 		}
 		return m, nil
 
@@ -485,57 +497,16 @@ func (m Model) fetchSessions() tea.Msg {
 		return errMsg(err)
 	}
 
-	// Try to get Redis data (non-fatal if unavailable)
-	var promises map[string]*types.CoderPromise
-	var heartbeats map[string]*types.HeartbeatData
-	var healthChecks map[string]*types.HealthCheckResult
-
-	if m.redisClient == nil {
-		client, err := redis.NewClient()
-		if err == nil {
-			m.redisClient = client
-		}
-	}
-
+	// Enrich sessions with Redis data if client is already initialized
 	if m.redisClient != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		promises, _ = m.redisClient.GetPromises(ctx)
-		heartbeats, _ = m.redisClient.GetHeartbeats(ctx)
-		healthChecks, _ = m.redisClient.GetHealthChecks(ctx)
-	}
+		promises, _ := m.redisClient.GetPromises(ctx)
+		heartbeats, _ := m.redisClient.GetHeartbeats(ctx)
+		healthChecks, _ := m.redisClient.GetHealthChecks(ctx)
 
-	// Enrich sessions with Redis data
-	for i := range sessions {
-		s := &sessions[i]
-
-		// Add promise data
-		if promise, ok := promises[s.Name]; ok {
-			s.Promise = promise
-			s.HasPromise = true
-		}
-
-		// Add heartbeat data
-		if hb, ok := heartbeats[s.Name]; ok {
-			s.HeartbeatStatus = redis.DetermineHeartbeatStatus(hb)
-			if hb.Task != "" && s.Task == "" {
-				s.Task = hb.Task
-			}
-			if hb.ParentSessionID != "" {
-				s.ParentSessionID = hb.ParentSessionID
-			}
-			s.Usage = hb.Usage
-		} else if s.IsOrchestrator {
-			s.HeartbeatStatus = types.HeartbeatHealthy
-		} else {
-			s.HeartbeatStatus = types.HeartbeatDead
-		}
-
-		// Add health check data (for stuck/unresponsive detection)
-		if hc, ok := healthChecks[s.Name]; ok {
-			s.HealthCheck = hc
-		}
+		enrichSessionsWithRedisData(sessions, promises, heartbeats, healthChecks)
 	}
 
 	// Sort: orchestrator first, then active, then completed, by creation time
@@ -675,4 +646,74 @@ func parseSpawnArgs(input string) ([]string, error) {
 	}
 	flush()
 	return args, nil
+}
+
+// enrichSessionsWithRedisData enriches sessions with Redis data
+func enrichSessionsWithRedisData(
+	sessions []types.Session,
+	promises map[string]*types.CoderPromise,
+	heartbeats map[string]*types.HeartbeatData,
+	healthChecks map[string]*types.HealthCheckResult,
+) {
+	for i := range sessions {
+		s := &sessions[i]
+
+		// Add promise data
+		if promise, ok := promises[s.Name]; ok {
+			s.Promise = promise
+			s.HasPromise = true
+		}
+
+		// Add heartbeat data
+		if hb, ok := heartbeats[s.Name]; ok {
+			s.HeartbeatStatus = redis.DetermineHeartbeatStatus(hb)
+			if hb.Task != "" && s.Task == "" {
+				s.Task = hb.Task
+			}
+			if hb.ParentSessionID != "" {
+				s.ParentSessionID = hb.ParentSessionID
+			}
+			s.Usage = hb.Usage
+		} else if s.IsOrchestrator {
+			s.HeartbeatStatus = types.HeartbeatHealthy
+		} else {
+			s.HeartbeatStatus = types.HeartbeatDead
+		}
+
+		// Add health check data (for stuck/unresponsive detection)
+		if hc, ok := healthChecks[s.Name]; ok {
+			s.HealthCheck = hc
+		}
+	}
+}
+
+// fetchRedisData asynchronously initializes Redis client and fetches data
+func (m Model) fetchRedisData() tea.Cmd {
+	return func() tea.Msg {
+		// Initialize client if needed
+		client := m.redisClient
+		if client == nil {
+			var err error
+			client, err = redis.NewClient()
+			if err != nil {
+				// Return empty data on error (non-fatal)
+				return redisDataMsg{}
+			}
+		}
+
+		// Fetch data with timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		promises, _ := client.GetPromises(ctx)
+		heartbeats, _ := client.GetHeartbeats(ctx)
+		healthChecks, _ := client.GetHealthChecks(ctx)
+
+		return redisDataMsg{
+			client:       client,
+			promises:     promises,
+			heartbeats:   heartbeats,
+			healthChecks: healthChecks,
+		}
+	}
 }
