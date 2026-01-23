@@ -32,6 +32,8 @@ const (
 	SessionStateKeyPrefix = "coders:session-state:"
 	// CrashEventKeyPrefix is the Redis key prefix for crash events.
 	CrashEventKeyPrefix = "coders:crash:"
+	// LoopNotificationKeyPrefix is the Redis key prefix for loop completion notifications.
+	LoopNotificationKeyPrefix = "coders:loop:notification:"
 )
 
 // Client wraps a Redis client with coders-specific operations.
@@ -467,4 +469,16 @@ func (c *Client) GetCrashEvents(ctx context.Context, sessionID string) ([]types.
 	}
 
 	return events, nil
+}
+
+// SetLoopNotification stores a loop completion notification.
+func (c *Client) SetLoopNotification(ctx context.Context, notification *types.LoopNotification) error {
+	data, err := json.Marshal(notification)
+	if err != nil {
+		return err
+	}
+
+	key := LoopNotificationKeyPrefix + notification.LoopID
+	// Notifications expire after 24 hours
+	return c.rdb.Set(ctx, key, data, 24*time.Hour).Err()
 }

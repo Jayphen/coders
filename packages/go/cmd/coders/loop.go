@@ -222,6 +222,15 @@ func executeLoop(todolistPath, cwdPath string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Parse todolist
+	tasks, err := parseTodolist(todolistPath)
+	if err != nil {
+		return fmt.Errorf("failed to parse todolist: %w", err)
+	}
+
+	fmt.Printf("📋 Found %d uncompleted tasks\n\n", len(tasks))
+
+	// Set up signal handling for graceful shutdown (after tasks are parsed)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -232,16 +241,12 @@ func executeLoop(todolistPath, cwdPath string) error {
 			LoopID: loopID,
 			Status: "paused",
 		})
+		// Send notification about paused loop
+		if err := notifyLoopComplete(loopID, len(tasks), "paused"); err != nil {
+			log.WithError(err).Warn("failed to send loop notification")
+		}
 		cancel()
 	}()
-
-	// Parse todolist
-	tasks, err := parseTodolist(todolistPath)
-	if err != nil {
-		return fmt.Errorf("failed to parse todolist: %w", err)
-	}
-
-	fmt.Printf("📋 Found %d uncompleted tasks\n\n", len(tasks))
 
 	if len(tasks) == 0 {
 		fmt.Println("\033[32m✅ All tasks already completed!\033[0m")
@@ -325,6 +330,11 @@ func executeLoop(todolistPath, cwdPath string) error {
 		TotalTasks:       len(tasks),
 		Status:           "completed",
 	})
+
+	// Send notification about completed loop
+	if err := notifyLoopComplete(loopID, len(tasks), "completed"); err != nil {
+		log.WithError(err).Warn("failed to send loop notification")
+	}
 
 	return nil
 }
@@ -482,4 +492,48 @@ func saveLoopState(state LoopState) error {
 
 	key := loopStateKeyPrefix + state.LoopID
 	return rdb.SetJSON(key, state, 7*24*time.Hour) // 7 day TTL
+}
+
+// notifyLoopComplete sends a notification when a loop finishes
+func notifyLoopComplete(loopID string, taskCount int, status string) error {
+	log := logging.WithCommand("loop")
+
+	rdb, err := redis.GetClient()
+	if err != nil {
+		log.WithError(err).Warn("failed to connect to Redis for notification")
+		return fmt.Errorf("failed to connect to Redis: %w", err)
+	}
+
+	notification := &types.LoopNotification{
+		LoopID:    loopID,
+		Timestamp: time.Now().UnixMilli(),
+		TaskCount: taskCount,
+		Status:    status,
+	}
+
+	// Add a descriptive message based on status
+	switch status {
+	case "completed":
+		notification.Message = fmt.Sprintf("Loop completed successfully with %d tasks", taskCount)
+	case "paused":
+		notification.Message = fmt.Sprintf("Loop paused after processing %d tasks", taskCount)
+	case "failed":
+		notification.Message = fmt.Sprintf("Loop failed after processing %d tasks", taskCount)
+	default:
+		notification.Message = fmt.Sprintf("Loop finished with status '%s' after %d tasks", status, taskCount)
+	}
+
+	ctx := context.Background()
+	if err := rdb.SetLoopNotification(ctx, notification); err != nil {
+		log.WithError(err).Warn("failed to store loop notification")
+		return fmt.Errorf("failed to store notification: %w", err)
+	}
+
+	log.WithFields(map[string]interface{}{
+		"loopId":    loopID,
+		"taskCount": taskCount,
+		"status":    status,
+	}).Info("loop notification sent")
+
+	return nil
 }

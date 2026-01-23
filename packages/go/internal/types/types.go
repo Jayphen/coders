@@ -153,3 +153,12 @@ type CrashEvent struct {
 	Reason      string `json:"reason"`
 	WillRestart bool   `json:"willRestart"`
 }
+
+// LoopNotification represents a notification sent when a loop completes.
+type LoopNotification struct {
+	LoopID    string `json:"loopId"`
+	Timestamp int64  `json:"timestamp"`
+	TaskCount int    `json:"taskCount"`
+	Status    string `json:"status"` // completed, paused, failed
+	Message   string `json:"message,omitempty"`
+}
