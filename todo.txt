@@ -7,8 +7,9 @@
 ## Phase 1: Reliability & Polish
 [x] Implement auto-reconnect logic for Redis disconnections
 [x] Add health checks for proactive detection of stuck sessions
-[ ] Implement automatic session restart on crash (error recovery)
+[x] Implement automatic session restart on crash (error recovery)
 [ ] Add structured logging for better debugging
+[ ] Add TUI session preview (live preview of selected session in split view)
 [x] Create configuration file support (YAML/JSON) for default settings
 [x] Add `--ollama` spawn flag to map `CODERS_OLLAMA_*` env vars to `ANTHROPIC_*` for Claude Code sessions (see `OLLAMA_CLAUDE_CODE.md`)
 [ ] Implement graceful degradation when Redis is unavailable (local fallback)
