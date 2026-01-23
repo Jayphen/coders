@@ -8,8 +8,10 @@ dist
 *.md
 !README.md
 !CLAUDE.md
+!TODOLIST.md
 !**/commands/*.md
 !skills/**/*.md
+!docs/*.md
 
 # Project planning/breakdown files (not part of plugin distribution)
 *-breakdown.md
