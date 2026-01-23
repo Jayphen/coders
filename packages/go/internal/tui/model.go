@@ -692,7 +692,12 @@ func (m Model) killCompletedSessions() tea.Cmd {
 }
 
 func parseSpawnArgs(input string) ([]string, error) {
-	var args []string
+	// Estimate capacity: rough heuristic of input_length/10 + 2, min 4
+	estCap := len(input)/10 + 2
+	if estCap < 4 {
+		estCap = 4
+	}
+	args := make([]string, 0, estCap)
 	var b strings.Builder
 	inSingle := false
 	inDouble := false
