@@ -354,6 +354,18 @@ func tailLines(s string, maxLines int) string {
 	return strings.Join(lines[len(lines)-maxLines:], "\n")
 }
 
+// tailLinesFromSlice is an optimized version that operates on pre-split lines.
+// This avoids re-splitting the same text on every render.
+func tailLinesFromSlice(lines []string, maxLines int) string {
+	if maxLines <= 0 {
+		return ""
+	}
+	if len(lines) <= maxLines {
+		return strings.Join(lines, "\n")
+	}
+	return strings.Join(lines[len(lines)-maxLines:], "\n")
+}
+
 // renderSessionDetail renders the detail panel for the selected session.
 func (m Model) renderSessionDetail(width int) string {
 	s := m.selectedSession()
