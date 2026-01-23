@@ -2,7 +2,7 @@
 # Derived from PRD roadmap and improvements
 
 ## 🚨 HIGH PRIORITY
-[ ] **URGENT: Debug spawn persistence bug** - Sessions spawned via `coders spawn` exit immediately after creation, even though the exact same tmux command works when run manually. Root cause appears to be Node.js process lifecycle issue. Investigation documented in `packages/plugin/__investigation__/spawn-persistence-bug.md`. Needs system tracing (dtruss) or daemon-based spawner architecture.
+[SKIP] **Debug spawn persistence bug** - SKIPPED: This is a Node.js-specific issue. The Go rewrite uses native binaries which don't have the same process lifecycle/signal propagation problems.
 
 ## Phase 1: Reliability & Polish
 [x] Implement auto-reconnect logic for Redis disconnections
