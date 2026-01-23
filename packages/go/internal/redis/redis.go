@@ -5,11 +5,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Jayphen/coders/internal/config"
 	"github.com/Jayphen/coders/internal/types"
 	"github.com/redis/go-redis/v9"
+)
+
+var (
+	clientOnce     sync.Once
+	singletonClient *Client
+	clientErr      error
 )
 
 const (
@@ -55,6 +62,14 @@ func NewClient() (*Client, error) {
 	}
 
 	return &Client{rdb: rdb}, nil
+}
+
+// GetClient returns a singleton Redis client instance.
+func GetClient() (*Client, error) {
+	clientOnce.Do(func() {
+		singletonClient, clientErr = NewClient()
+	})
+	return singletonClient, clientErr
 }
 
 // Close closes the Redis connection.
@@ -161,6 +176,64 @@ func (c *Client) SetPromise(ctx context.Context, promise *types.CoderPromise) er
 func (c *Client) DeletePromise(ctx context.Context, sessionID string) error {
 	key := PromiseKeyPrefix + sessionID
 	return c.rdb.Del(ctx, key).Err()
+}
+
+// GetPromise returns a single promise for a session.
+func (c *Client) GetPromise(sessionID string) (*types.CoderPromise, error) {
+	ctx := context.Background()
+	key := PromiseKeyPrefix + sessionID
+	data, err := c.rdb.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var promise types.CoderPromise
+	if err := json.Unmarshal([]byte(data), &promise); err != nil {
+		return nil, err
+	}
+
+	return &promise, nil
+}
+
+// SetJSON stores a JSON-serializable value with a TTL.
+func (c *Client) SetJSON(key string, value interface{}, ttl time.Duration) error {
+	ctx := context.Background()
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return c.rdb.Set(ctx, key, data, ttl).Err()
+}
+
+// GetRaw retrieves a raw string value from Redis.
+func (c *Client) GetRaw(ctx context.Context, key string) (string, error) {
+	return c.rdb.Get(ctx, key).Result()
+}
+
+// MGetRaw retrieves multiple raw string values from Redis.
+func (c *Client) MGetRaw(ctx context.Context, keys []string) ([]string, error) {
+	values, err := c.rdb.MGet(ctx, keys...).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]string, len(values))
+	for i, val := range values {
+		if val != nil {
+			if str, ok := val.(string); ok {
+				result[i] = str
+			}
+		}
+	}
+	return result, nil
+}
+
+// ScanKeys scans for all keys matching a pattern (exported version).
+func (c *Client) ScanKeys(ctx context.Context, pattern string) ([]string, error) {
+	return c.scanKeys(ctx, pattern)
 }
 
 // SetHeartbeat stores a heartbeat for a session.
