@@ -139,12 +139,12 @@ Migration of TUI + CLI from TypeScript/Node.js to Go for improved performance an
 
 ## Phase 7: Distribution
 
-- [ ] Build darwin/arm64 binary
-- [ ] Build darwin/amd64 binary
-- [ ] Build linux/amd64 binary
-- [ ] Build linux/arm64 binary
-- [ ] Create GitHub release workflow
-- [ ] Add install script (curl | sh)
+- [x] Build darwin/arm64 binary (~7MB)
+- [x] Build darwin/amd64 binary (~7.4MB)
+- [x] Build linux/amd64 binary (~7.3MB)
+- [x] Build linux/arm64 binary (~6.9MB)
+- [x] Create GitHub release workflow (.github/workflows/release.yml)
+- [x] Add install script (curl | sh)
 - [ ] Optional: Homebrew formula
 
 ---
@@ -167,7 +167,7 @@ Migration of TUI + CLI from TypeScript/Node.js to Go for improved performance an
 | 4. CLI | ✅ Complete | All 8 commands implemented |
 | 5. Background | ✅ Complete | Heartbeat implemented |
 | 6. Integration | ✅ Complete | bin/coders prefers Go binary |
-| 7. Distribution | Not Started | Multi-platform builds |
+| 7. Distribution | ✅ Complete | GitHub Actions, install script |
 
 ---
 

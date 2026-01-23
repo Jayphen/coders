@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: darwin
+            arch: arm64
+          - os: darwin
+            arch: amd64
+          - os: linux
+            arch: amd64
+          - os: linux
+            arch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Get version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build
+        run: |
+          cd packages/go
+          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build \
+            -ldflags "-s -w -X main.Version=${{ steps.version.outputs.version }}" \
+            -o coders-${{ matrix.os }}-${{ matrix.arch }} \
+            ./cmd/coders
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coders-${{ matrix.os }}-${{ matrix.arch }}
+          path: packages/go/coders-${{ matrix.os }}-${{ matrix.arch }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          for dir in artifacts/*/; do
+            binary=$(find "$dir" -type f)
+            name=$(basename "$dir")
+            cp "$binary" "release/$name"
+            chmod +x "release/$name"
+          done
+          ls -la release/
+
+      - name: Create checksums
+        run: |
+          cd release
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Coders ${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          files: |
+            release/*
+          body: |
+            ## Coders ${{ steps.version.outputs.version }}
+
+            ### Installation
+
+            **macOS (Apple Silicon)**
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/coders-darwin-arm64 -o coders
+            chmod +x coders
+            sudo mv coders /usr/local/bin/
+            ```
+
+            **macOS (Intel)**
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/coders-darwin-amd64 -o coders
+            chmod +x coders
+            sudo mv coders /usr/local/bin/
+            ```
+
+            **Linux (x64)**
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/coders-linux-amd64 -o coders
+            chmod +x coders
+            sudo mv coders /usr/local/bin/
+            ```
+
+            **Linux (ARM64)**
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/coders-linux-arm64 -o coders
+            chmod +x coders
+            sudo mv coders /usr/local/bin/
+            ```
+
+            ### Verify Checksum
+            ```bash
+            sha256sum -c checksums.txt
+            ```
