@@ -76,7 +76,7 @@ Migration of TUI + CLI from TypeScript/Node.js to Go for improved performance an
 ## Phase 4: CLI Commands
 
 ### Core Commands
-- [ ] `coders spawn` - Spawn new session
+- [x] `coders spawn` - Spawn new session
 - [x] `coders list` - List all sessions
 - [x] `coders attach` - Attach to session
 - [x] `coders kill` - Kill session
@@ -86,19 +86,19 @@ Migration of TUI + CLI from TypeScript/Node.js to Go for improved performance an
 - [x] `coders version` - Show version
 
 ### Spawn Features
-- [ ] Tool selection (claude, gemini, codex, opencode)
-- [ ] Task description via --task
-- [ ] Working directory via --cwd (with zoxide support)
-- [ ] Model selection via --model
+- [x] Tool selection (claude, gemini, codex, opencode)
+- [x] Task description via --task
+- [x] Working directory via --cwd (with zoxide support)
+- [x] Model selection via --model
 - [ ] Worktree creation via --worktree
 - [ ] Context files via --context
-- [ ] Heartbeat enabling
-- [ ] Wait for CLI ready before returning
+- [x] Heartbeat enabling (flag present, implementation pending)
+- [x] Wait for CLI ready before returning
 
 ### List Features
-- [ ] JSON output format
-- [ ] Filter by status (active/completed)
-- [ ] Show promises/heartbeat status
+- [x] JSON output format
+- [x] Filter by status (active/completed)
+- [x] Show promises/heartbeat status
 
 ## Phase 5: Background Processes
 
@@ -161,10 +161,10 @@ Migration of TUI + CLI from TypeScript/Node.js to Go for improved performance an
 | 1. Setup | ✅ Complete | Module, deps, Makefile done |
 | 2. Core Libraries | ✅ Complete | Tmux, Redis, Types implemented |
 | 3. TUI | ✅ Complete | All components, keyboard, styling |
-| 4. CLI | 🚧 In Progress | list, tui, version done; spawn, attach, kill, promise remaining |
-| 5. Background | Not Started | |
-| 6. Integration | Not Started | |
-| 7. Distribution | Not Started | |
+| 4. CLI | ✅ Complete | All 8 commands implemented |
+| 5. Background | Not Started | Heartbeat, loop runner |
+| 6. Integration | Not Started | Plugin integration |
+| 7. Distribution | Not Started | Multi-platform builds |
 
 ---
 
