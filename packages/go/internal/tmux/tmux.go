@@ -262,22 +262,13 @@ func killPIDs(pids []int, signal string) {
 }
 
 // filterLivePIDs returns only the PIDs that are still running.
+// Uses kill -0 to test process existence without scanning the entire process table.
 func filterLivePIDs(pids []int) []int {
-	out, err := exec.Command("ps", "-axo", "pid=").Output()
-	if err != nil {
-		return nil
-	}
-
-	live := make(map[int]bool)
-	for _, line := range strings.Split(string(out), "\n") {
-		if pid, err := strconv.Atoi(strings.TrimSpace(line)); err == nil {
-			live[pid] = true
-		}
-	}
-
 	var result []int
 	for _, pid := range pids {
-		if live[pid] {
+		// kill -0 tests if a process exists without sending a signal
+		// Returns 0 if the process exists, non-zero otherwise
+		if err := exec.Command("kill", "-0", strconv.Itoa(pid)).Run(); err == nil {
 			result = append(result, pid)
 		}
 	}
