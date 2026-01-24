@@ -2,14 +2,18 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/creack/pty"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/Jayphen/coders/internal/config"
 	"github.com/Jayphen/coders/internal/logging"
@@ -27,6 +31,7 @@ var (
 	spawnRestartOnCrash bool
 	spawnMaxRestarts    int
 	spawnWorktree       bool
+	spawnPTY            bool
 )
 
 func newSpawnCmd() *cobra.Command {
@@ -44,7 +49,7 @@ func newSpawnCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "spawn [tool]",
 		Short: "Spawn a new coder session",
-		Long: `Spawn a new AI coding session in tmux.
+		Long: `Spawn a new AI coding session.
 
 Supported tools: claude, gemini, codex, opencode
 
@@ -53,8 +58,16 @@ Examples:
   coders spawn gemini --task "Add unit tests" --cwd ~/projects/myapp
   coders spawn codex --task "Refactor auth module" --model gpt-4
   coders spawn --attach  # Spawn and attach immediately
+  coders spawn --pty --task "Interactive coding"  # Direct PTY (no tmux)
   coders spawn --restart-on-crash --task "Long running task"  # Auto-restart on crash
   coders spawn --worktree --task "Feature branch work"  # Create git worktree
+
+Direct PTY Mode (--pty):
+  With --pty, the session uses direct PTY management instead of tmux.
+  This provides zero-latency keystroke forwarding, essential for features
+  like autocomplete and slash commands in Claude Code. The session runs
+  in the foreground and exits when you press Ctrl+]. Note: sessions
+  cannot be detached/reattached without tmux.
 
 Git Worktree:
   With --worktree, a new git worktree is created for isolated development.
@@ -81,6 +94,7 @@ Crash Recovery:
 	cmd.Flags().BoolVar(&spawnRestartOnCrash, "restart-on-crash", false, "Automatically restart session if it crashes (requires Redis)")
 	cmd.Flags().IntVar(&spawnMaxRestarts, "max-restarts", 3, "Maximum number of automatic restarts (default: 3)")
 	cmd.Flags().BoolVar(&spawnWorktree, "worktree", false, "Create a git worktree for isolated development")
+	cmd.Flags().BoolVar(&spawnPTY, "pty", false, "Use direct PTY instead of tmux (zero-latency keystrokes)")
 
 	return cmd
 }
@@ -151,6 +165,11 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 
 	// Create logger with session context
 	log = log.WithSessionID(sessionID)
+
+	// Direct PTY mode - bypasses tmux for zero-latency keystrokes
+	if spawnPTY {
+		return runPTYSpawn(tool, spawnTask, cwd, spawnModel, sessionID, spawnOllama)
+	}
 
 	// Check if session already exists
 	if tmux.SessionExists(sessionID) {
@@ -618,4 +637,159 @@ func findGitRoot(startPath string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+// runPTYSpawn runs the tool directly with PTY management (no tmux).
+// This provides zero-latency keystroke forwarding for features like autocomplete.
+func runPTYSpawn(tool, task, cwd, model, sessionID string, useOllama bool) error {
+	log := logging.WithCommand("spawn-pty").WithSessionID(sessionID)
+
+	fmt.Printf("\033[36m🔗 Direct PTY Mode\033[0m\n")
+	fmt.Printf("   Tool: %s\n", tool)
+	if task != "" {
+		fmt.Printf("   Task: %s\n", task)
+	}
+	fmt.Printf("   Directory: %s\n", cwd)
+	fmt.Printf("   Press Ctrl+] to exit\n\n")
+
+	// Build command arguments
+	args := buildToolArgs(tool, model, sessionID, useOllama)
+
+	// Create command
+	cmd := exec.Command(tool, args...)
+	cmd.Dir = cwd
+	cmd.Env = os.Environ()
+
+	// Add session ID to environment
+	cmd.Env = append(cmd.Env, fmt.Sprintf("CODERS_SESSION_ID=%s", sessionID))
+
+	// Add Ollama environment variables if needed
+	if useOllama {
+		cfg, _ := config.Get()
+		baseURL := cfg.Ollama.BaseURL
+		if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+			baseURL = "https://" + baseURL
+		}
+		cmd.Env = append(cmd.Env,
+			fmt.Sprintf("ANTHROPIC_BASE_URL=%s", baseURL),
+			"ANTHROPIC_API_KEY=",
+		)
+		if cfg.Ollama.AuthToken != "" {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("ANTHROPIC_AUTH_TOKEN=%s", cfg.Ollama.AuthToken))
+		} else if cfg.Ollama.APIKey != "" {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("ANTHROPIC_AUTH_TOKEN=%s", cfg.Ollama.APIKey))
+		}
+	}
+
+	// Start with PTY
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to start PTY: %w", err)
+	}
+	defer ptmx.Close()
+
+	log.Info("PTY session started")
+
+	// Handle window resize
+	resizeCh := make(chan os.Signal, 1)
+	signal.Notify(resizeCh, syscall.SIGWINCH)
+	go func() {
+		for range resizeCh {
+			if err := pty.InheritSize(os.Stdin, ptmx); err != nil {
+				log.WithError(err).Debug("failed to resize PTY")
+			}
+		}
+	}()
+	// Initial resize
+	resizeCh <- syscall.SIGWINCH
+
+	// Put terminal in raw mode
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		return fmt.Errorf("failed to set raw mode: %w", err)
+	}
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
+
+	// Send initial prompt/task if provided
+	if task != "" && (tool == "claude" || tool == "opencode") {
+		prompt := buildPrompt(tool, task)
+		// Wait a bit for the tool to start
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			ptmx.Write([]byte(prompt + "\n"))
+		}()
+	}
+
+	// Copy PTY output to stdout
+	go func() {
+		io.Copy(os.Stdout, ptmx)
+	}()
+
+	// Copy stdin to PTY, watch for Ctrl+]
+	go func() {
+		buf := make([]byte, 1)
+		for {
+			n, err := os.Stdin.Read(buf)
+			if err != nil || n == 0 {
+				return
+			}
+			// Ctrl+] (0x1D) to exit
+			if buf[0] == 0x1D {
+				log.Info("Ctrl+] pressed, terminating session")
+				cmd.Process.Signal(syscall.SIGTERM)
+				return
+			}
+			ptmx.Write(buf[:n])
+		}
+	}()
+
+	// Wait for process to exit
+	err = cmd.Wait()
+
+	// Clean up signal handler
+	signal.Stop(resizeCh)
+	close(resizeCh)
+
+	if err != nil {
+		log.WithError(err).Info("PTY session ended with error")
+		// Don't return error for normal exits (Ctrl+C, Ctrl+])
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if exitErr.ExitCode() == -1 || exitErr.ExitCode() == 130 {
+				return nil
+			}
+		}
+		return err
+	}
+
+	log.Info("PTY session ended normally")
+	return nil
+}
+
+// buildToolArgs builds command arguments for the tool (for PTY mode).
+func buildToolArgs(tool, model, sessionID string, useOllama bool) []string {
+	var args []string
+
+	switch tool {
+	case "claude":
+		args = append(args, "--dangerously-skip-permissions")
+		if model != "" {
+			args = append(args, "--model", model)
+		}
+	case "gemini":
+		args = append(args, "--yolo")
+		if model != "" {
+			args = append(args, "--model", model)
+		}
+	case "codex":
+		args = append(args, "--dangerously-bypass-approvals-and-sandbox")
+		if model != "" {
+			args = append(args, "--model", model)
+		}
+	case "opencode":
+		if model != "" {
+			args = append(args, "--model", model)
+		}
+	}
+
+	return args
 }
