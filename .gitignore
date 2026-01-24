@@ -25,3 +25,6 @@ scripts/monitor-and-trigger.sh
 
 # Runtime files
 nohup.out
+
+# Coders worktrees
+.coders/worktrees/
