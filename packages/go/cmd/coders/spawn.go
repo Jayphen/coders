@@ -26,6 +26,7 @@ var (
 	spawnOllama         bool
 	spawnRestartOnCrash bool
 	spawnMaxRestarts    int
+	spawnWorktree       bool
 )
 
 func newSpawnCmd() *cobra.Command {
@@ -53,6 +54,13 @@ Examples:
   coders spawn codex --task "Refactor auth module" --model gpt-4
   coders spawn --attach  # Spawn and attach immediately
   coders spawn --restart-on-crash --task "Long running task"  # Auto-restart on crash
+  coders spawn --worktree --task "Feature branch work"  # Create git worktree
+
+Git Worktree:
+  With --worktree, a new git worktree is created for isolated development.
+  The worktree is created in .coders/worktrees/<session-name> with a branch
+  named session/<session-name>. This allows working on features in isolation
+  without affecting the main working directory.
 
 Crash Recovery:
   With --restart-on-crash, the session will automatically restart if the CLI
@@ -72,6 +80,7 @@ Crash Recovery:
 	cmd.Flags().BoolVar(&spawnOllama, "ollama", false, "Use Ollama backend (requires CODERS_OLLAMA_BASE_URL and CODERS_OLLAMA_AUTH_TOKEN)")
 	cmd.Flags().BoolVar(&spawnRestartOnCrash, "restart-on-crash", false, "Automatically restart session if it crashes (requires Redis)")
 	cmd.Flags().IntVar(&spawnMaxRestarts, "max-restarts", 3, "Maximum number of automatic restarts (default: 3)")
+	cmd.Flags().BoolVar(&spawnWorktree, "worktree", false, "Create a git worktree for isolated development")
 
 	return cmd
 }
@@ -126,9 +135,19 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 		cwd = resolved
 	}
 
-	// Generate session name
+	// Generate session name (needed before worktree creation)
 	sessionName := generateSessionName(tool, spawnTask)
 	sessionID := tmux.SessionPrefix + sessionName
+
+	// Create git worktree if requested
+	if spawnWorktree {
+		worktreePath, err := createWorktree(cwd, sessionName)
+		if err != nil {
+			return fmt.Errorf("failed to create worktree: %w", err)
+		}
+		cwd = worktreePath
+		fmt.Printf("\033[32m✅ Created git worktree: %s\033[0m\n", worktreePath)
+	}
 
 	// Create logger with session context
 	log = log.WithSessionID(sessionID)
@@ -549,4 +568,54 @@ func startHeartbeat(sessionID, task, parentSessionID string) error {
 	}()
 
 	return nil
+}
+
+// createWorktree creates a git worktree for isolated development.
+func createWorktree(basePath, sessionName string) (string, error) {
+	// Find git root
+	gitRoot, err := findGitRoot(basePath)
+	if err != nil {
+		return "", fmt.Errorf("not in a git repository: %w", err)
+	}
+
+	// Create worktrees directory in git root
+	worktreesDir := filepath.Join(gitRoot, ".coders", "worktrees")
+	if err := os.MkdirAll(worktreesDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create worktrees directory: %w", err)
+	}
+
+	// Create worktree path
+	worktreePath := filepath.Join(worktreesDir, sessionName)
+
+	// Check if worktree already exists
+	if _, err := os.Stat(worktreePath); err == nil {
+		return "", fmt.Errorf("worktree already exists: %s", worktreePath)
+	}
+
+	// Create branch name
+	branchName := fmt.Sprintf("session/%s", sessionName)
+
+	// Check if branch already exists
+	checkBranchCmd := exec.Command("git", "-C", gitRoot, "rev-parse", "--verify", branchName)
+	if checkBranchCmd.Run() == nil {
+		return "", fmt.Errorf("branch already exists: %s", branchName)
+	}
+
+	// Create the worktree with a new branch
+	createCmd := exec.Command("git", "-C", gitRoot, "worktree", "add", "-b", branchName, worktreePath)
+	if output, err := createCmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("failed to create worktree: %w\nOutput: %s", err, string(output))
+	}
+
+	return worktreePath, nil
+}
+
+// findGitRoot finds the root of the git repository.
+func findGitRoot(startPath string) (string, error) {
+	cmd := exec.Command("git", "-C", startPath, "rev-parse", "--show-toplevel")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
 }

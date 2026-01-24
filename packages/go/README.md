@@ -50,6 +50,25 @@ coders spawn claude --task "Add tests" --cwd ~/projects/myapp
 coders spawn claude --model sonnet --attach  # Spawn and attach immediately
 ```
 
+#### Git Worktrees
+
+Create isolated git worktrees for feature development:
+
+```bash
+coders spawn claude --worktree --task "Add new feature"
+```
+
+This creates:
+- A new worktree in `.coders/worktrees/<session-name>`
+- A new branch named `session/<session-name>`
+- Session runs in the isolated worktree directory
+
+Benefits:
+- Work on features without affecting the main working directory
+- Each session gets its own branch automatically
+- Easy cleanup with `git worktree remove`
+- Multiple sessions can work on different branches simultaneously
+
 #### Ollama Backend
 
 Run sessions using Ollama instead of Anthropic's API:
