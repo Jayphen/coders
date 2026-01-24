@@ -566,6 +566,11 @@ func (m Model) renderSessionPreview(width int, maxHeight int) string {
 		borderColor = ColorCyan
 		headerStyle = lipgloss.NewStyle().Bold(true).Foreground(ColorCyan)
 		inputLabelStyle = HelpKeyStyle
+		// In passthrough mode, use a different color to indicate active forwarding
+		if m.passthroughMode {
+			borderColor = ColorYellow
+			headerStyle = lipgloss.NewStyle().Bold(true).Foreground(ColorYellow)
+		}
 	}
 
 	style := lipgloss.NewStyle().
@@ -578,6 +583,16 @@ func (m Model) renderSessionPreview(width int, maxHeight int) string {
 	}
 
 	header := headerStyle.Render(title)
+
+	// Add passthrough mode indicator to header
+	if m.passthroughMode {
+		indicator := lipgloss.NewStyle().
+			Foreground(ColorYellow).
+			Bold(true).
+			Render(" [PASSTHROUGH]")
+		header = header + indicator
+	}
+
 	inputModel := m.previewInput
 	if width > 0 {
 		const (
@@ -592,7 +607,16 @@ func (m Model) renderSessionPreview(width int, maxHeight int) string {
 		}
 		inputModel.Width = inputWidth
 	}
-	inputLine := inputLabelStyle.Render("Send: ") + inputModel.View()
+
+	// Show different input line based on mode
+	var inputLine string
+	if m.passthroughMode {
+		inputLine = lipgloss.NewStyle().
+			Foreground(ColorYellow).
+			Render("Mode: Passthrough (Shift+Tab to exit, Esc Esc to exit)")
+	} else {
+		inputLine = inputLabelStyle.Render("Send: ") + inputModel.View()
+	}
 	if maxHeight > 0 {
 		const (
 			previewMarginTop = 1
@@ -650,6 +674,7 @@ func (m Model) renderStatusBar() string {
 	help := []string{
 		HelpKeyStyle.Render("↑↓/jk") + " nav",
 		HelpKeyStyle.Render("tab") + " focus",
+		HelpKeyStyle.Render("shift+tab") + " passthrough",
 		HelpKeyStyle.Render("a/↵") + " attach",
 		HelpKeyStyle.Render("s") + " spawn",
 		HelpKeyStyle.Render("K") + " kill",

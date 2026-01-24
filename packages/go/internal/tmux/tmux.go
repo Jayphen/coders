@@ -299,6 +299,47 @@ func SendKeys(sessionName, keys string) error {
 	return exec.Command("tmux", "send-keys", "-t", sessionName, "Enter").Run()
 }
 
+// SendRawKey sends a single raw keystroke to a tmux session without interpretation.
+// This is used for passthrough mode where individual keystrokes are forwarded in real-time.
+// For literal characters (a-z, 0-9, etc.), use -l flag to send them literally.
+// For special keys (Tab, Enter, Escape, etc.), send them as named keys without -l.
+func SendRawKey(sessionName, key string) error {
+	// Map of Bubbletea key strings to tmux key names
+	specialKeys := map[string]string{
+		"enter":     "Enter",
+		"tab":       "Tab",
+		"esc":       "Escape",
+		"backspace": "BSpace",
+		"delete":    "DC",
+		"up":        "Up",
+		"down":      "Down",
+		"left":      "Left",
+		"right":     "Right",
+		"home":      "Home",
+		"end":       "End",
+		"pgup":      "PageUp",
+		"pgdown":    "PageDown",
+		"space":     "Space",
+	}
+
+	// Check if it's a special key
+	if tmuxKey, ok := specialKeys[key]; ok {
+		return exec.Command("tmux", "send-keys", "-t", sessionName, tmuxKey).Run()
+	}
+
+	// Check for Ctrl combinations (e.g., "ctrl+a", "ctrl+e")
+	if strings.HasPrefix(key, "ctrl+") {
+		letter := strings.TrimPrefix(key, "ctrl+")
+		if len(letter) == 1 {
+			// Send Ctrl+letter using C- notation
+			return exec.Command("tmux", "send-keys", "-t", sessionName, "C-"+letter).Run()
+		}
+	}
+
+	// For regular characters, send literally with -l flag
+	return exec.Command("tmux", "send-keys", "-l", "-t", sessionName, key).Run()
+}
+
 // CapturePane returns the last N lines of output from a session's active pane.
 func CapturePane(sessionName string, lines int) (string, error) {
 	if lines <= 0 {

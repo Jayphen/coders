@@ -32,6 +32,8 @@ type Model struct {
 	previewLines   int
 	previewFocus   bool
 	previewInput   textinput.Model
+	passthroughMode bool           // When true, forward raw keystrokes to tmux
+	lastEscTime     time.Time      // Track last Esc press for double-Esc detection
 
 	// Preview caching - avoid re-splitting on every render
 	previewSplitLines []string
@@ -70,18 +72,19 @@ type viewState struct {
 	previewSession string
 	previewErr     string // error message text
 	previewLoading bool
-	previewFocus   bool
-	loading        bool
-	err            string // error message text
-	statusMessage  string
-	statusExpired  bool   // whether status message should be shown
-	confirmKill    bool
-	spawnMode      bool
-	spawnInput     string
-	spawning       bool
-	width, height  int
-	spinnerView    string // spinner appearance (only when loading)
-	previewInput   string // only when previewFocus
+	previewFocus    bool
+	passthroughMode bool   // passthrough mode indicator
+	loading         bool
+	err             string // error message text
+	statusMessage   string
+	statusExpired   bool   // whether status message should be shown
+	confirmKill     bool
+	spawnMode       bool
+	spawnInput      string
+	spawning        bool
+	width, height   int
+	spinnerView     string // spinner appearance (only when loading)
+	previewInput    string // only when previewFocus
 }
 
 // Messages
@@ -300,6 +303,53 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Handle preview input focus
 	if m.previewFocus {
+		// Check for passthrough mode toggle (Shift+Tab to enter/exit)
+		if msg.String() == "shift+tab" {
+			m.passthroughMode = !m.passthroughMode
+			if m.passthroughMode {
+				m.setStatus("Passthrough mode enabled - keystrokes forwarded to session (Shift+Tab to exit)")
+			} else {
+				m.setStatus("Passthrough mode disabled")
+			}
+			return m, nil
+		}
+
+		// Handle passthrough mode - forward raw keystrokes
+		if m.passthroughMode {
+			s := m.selectedSession()
+			if s == nil {
+				m.setStatus("No session selected")
+				m.passthroughMode = false
+				return m, nil
+			}
+
+			// Allow Ctrl+C to quit even in passthrough mode
+			if msg.String() == "ctrl+c" {
+				return m, tea.Quit
+			}
+
+			// Check for double-Esc to exit passthrough mode
+			if msg.String() == "esc" {
+				now := time.Now()
+				if !m.lastEscTime.IsZero() && now.Sub(m.lastEscTime) < 500*time.Millisecond {
+					// Double-Esc detected - exit passthrough mode
+					m.passthroughMode = false
+					m.setStatus("Passthrough mode disabled")
+					m.lastEscTime = time.Time{}
+					return m, nil
+				}
+				m.lastEscTime = now
+				// Still forward the first Esc to the session
+			}
+
+			// Forward the keystroke to tmux
+			if err := tmux.SendRawKey(s.Name, msg.String()); err != nil {
+				m.setStatus(fmt.Sprintf("Send key failed: %v", err))
+			}
+			return m, nil
+		}
+
+		// Normal buffered input mode (legacy behavior)
 		switch msg.String() {
 		case "tab":
 			m.previewFocus = false
@@ -414,20 +464,21 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // currentViewState captures the current state that affects rendering.
 func (m Model) currentViewState() viewState {
 	vs := viewState{
-		sessionCount:   len(m.sessions),
-		selectedIndex:  m.selectedIndex,
-		preview:        m.preview,
-		previewSession: m.previewSession,
-		previewLoading: m.previewLoading,
-		previewFocus:   m.previewFocus,
-		loading:        m.loading,
-		statusMessage:  m.statusMessage,
-		statusExpired:  time.Now().After(m.statusExpiry),
-		confirmKill:    m.confirmKill,
-		spawnMode:      m.spawnMode,
-		spawning:       m.spawning,
-		width:          m.width,
-		height:         m.height,
+		sessionCount:    len(m.sessions),
+		selectedIndex:   m.selectedIndex,
+		preview:         m.preview,
+		previewSession:  m.previewSession,
+		previewLoading:  m.previewLoading,
+		previewFocus:    m.previewFocus,
+		passthroughMode: m.passthroughMode,
+		loading:         m.loading,
+		statusMessage:   m.statusMessage,
+		statusExpired:   time.Now().After(m.statusExpiry),
+		confirmKill:     m.confirmKill,
+		spawnMode:       m.spawnMode,
+		spawning:        m.spawning,
+		width:           m.width,
+		height:          m.height,
 	}
 
 	if m.previewErr != nil {
