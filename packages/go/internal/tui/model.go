@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/Jayphen/coders/internal/redis"
+	"github.com/Jayphen/coders/internal/session"
 	"github.com/Jayphen/coders/internal/tmux"
 	"github.com/Jayphen/coders/internal/types"
 )
@@ -53,7 +54,8 @@ type Model struct {
 	spinner spinner.Model
 
 	// Dependencies
-	redisClient *redis.Client
+	redisClient    *redis.Client
+	sessionManager *session.Manager
 
 	// View caching - avoid re-rendering when state hasn't changed
 	cachedView     string
@@ -125,12 +127,13 @@ func NewModel(version string) Model {
 	pi.Blur()
 
 	return Model{
-		version:      version,
-		loading:      true,
-		spinner:      s,
-		spawnInput:   ti,
-		previewLines: defaultPreviewLines,
-		previewInput: pi,
+		version:        version,
+		loading:        true,
+		spinner:        s,
+		spawnInput:     ti,
+		previewLines:   defaultPreviewLines,
+		previewInput:   pi,
+		sessionManager: session.NewManager(),
 	}
 }
 
@@ -315,10 +318,19 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.setStatus("No session selected")
 				return m, nil
 			}
-			if err := tmux.SendKeys(s.Name, text); err != nil {
-				m.setStatus(fmt.Sprintf("Send failed: %v", err))
+			// Send to PTY or tmux based on session type
+			if s.IsPTY && s.PTYSessionID != "" && m.sessionManager != nil {
+				if err := m.sessionManager.SendKeys(s.PTYSessionID, text+"\n"); err != nil {
+					m.setStatus(fmt.Sprintf("Send failed: %v", err))
+				} else {
+					m.setStatus("Sent to PTY session")
+				}
 			} else {
-				m.setStatus("Sent to session")
+				if err := tmux.SendKeys(s.Name, text); err != nil {
+					m.setStatus(fmt.Sprintf("Send failed: %v", err))
+				} else {
+					m.setStatus("Sent to session")
+				}
 			}
 			m.previewInput.SetValue("")
 			return m, nil
@@ -373,7 +385,15 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "K":
 		if len(m.sessions) > 0 && m.selectedIndex < len(m.sessions) {
 			session := m.sessions[m.selectedIndex]
-			tmux.KillSession(session.Name)
+			// Kill PTY or tmux session based on type
+			if session.IsPTY && session.PTYSessionID != "" && m.sessionManager != nil {
+				if err := m.sessionManager.KillSession(session.PTYSessionID); err != nil {
+					m.setStatus(fmt.Sprintf("Kill failed: %v", err))
+					return m, nil
+				}
+			} else {
+				tmux.KillSession(session.Name)
+			}
 			if m.redisClient != nil {
 				m.redisClient.DeletePromise(context.Background(), session.Name)
 			}
@@ -582,6 +602,28 @@ func (m Model) fetchSessions() tea.Msg {
 		return errMsg(err)
 	}
 
+	// Add PTY sessions from SessionManager
+	if m.sessionManager != nil {
+		ptySessions := m.sessionManager.ListSessions()
+		for _, ps := range ptySessions {
+			createdAt := ps.CreatedAt
+			session := types.Session{
+				Name:            ps.Name,
+				Tool:            ps.Tool,
+				Task:            ps.Task,
+				Cwd:             ps.Cwd,
+				CreatedAt:       &createdAt,
+				IsPTY:           true,
+				PTYSessionID:    ps.ID,
+				HeartbeatStatus: types.HeartbeatHealthy, // PTY sessions are always "healthy" while running
+			}
+			if !ps.IsRunning() {
+				session.HeartbeatStatus = types.HeartbeatDead
+			}
+			sessions = append(sessions, session)
+		}
+	}
+
 	// Enrich sessions with Redis data if client is already initialized
 	if m.redisClient != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -637,6 +679,21 @@ func (m Model) fetchSessions() tea.Msg {
 }
 
 func (m Model) fetchPreview(sessionName string, lines int) tea.Cmd {
+	// Check if this is a PTY session
+	s := m.selectedSession()
+	if s != nil && s.IsPTY && s.PTYSessionID != "" && m.sessionManager != nil {
+		ptySessionID := s.PTYSessionID
+		return func() tea.Msg {
+			outputLines, err := m.sessionManager.CaptureOutput(ptySessionID, lines)
+			if err != nil {
+				return previewMsg{session: sessionName, output: "", err: err}
+			}
+			output := strings.Join(outputLines, "\n")
+			return previewMsg{session: sessionName, output: output, err: nil}
+		}
+	}
+
+	// Default: tmux session
 	return func() tea.Msg {
 		output, err := tmux.CapturePane(sessionName, lines)
 		return previewMsg{session: sessionName, output: output, err: err}
@@ -644,18 +701,62 @@ func (m Model) fetchPreview(sessionName string, lines int) tea.Cmd {
 }
 
 func (m Model) spawnSession(args string) tea.Cmd {
+	parsedArgs, err := parseSpawnArgs(args)
+	if err != nil {
+		return func() tea.Msg {
+			return spawnCompleteMsg{err: err}
+		}
+	}
+	if len(parsedArgs) == 0 {
+		return func() tea.Msg {
+			return spawnCompleteMsg{err: fmt.Errorf("no spawn arguments provided")}
+		}
+	}
+
+	// Check if --pty flag is present
+	isPTY := false
+	for _, arg := range parsedArgs {
+		if arg == "--pty" {
+			isPTY = true
+			break
+		}
+	}
+
+	// For PTY sessions, create directly via SessionManager
+	if isPTY && m.sessionManager != nil {
+		// Extract tool and task from args
+		tool := "claude"
+		task := ""
+		cwd, _ := os.Getwd()
+
+		for i, arg := range parsedArgs {
+			switch {
+			case arg == "--pty":
+				// skip
+			case arg == "--task" && i+1 < len(parsedArgs):
+				task = parsedArgs[i+1]
+			case arg == "-t" || arg == "--tool":
+				if i+1 < len(parsedArgs) {
+					tool = parsedArgs[i+1]
+				}
+			case !strings.HasPrefix(arg, "-") && i == 0:
+				// First non-flag arg is the tool
+				tool = arg
+			}
+		}
+
+		sm := m.sessionManager
+		return func() tea.Msg {
+			_, err := sm.CreateSession(tool, task, cwd)
+			return spawnCompleteMsg{err: err}
+		}
+	}
+
+	// Default: spawn via external command (tmux-based)
 	return func() tea.Msg {
 		exe, err := os.Executable()
 		if err != nil {
 			return spawnCompleteMsg{err: err}
-		}
-
-		parsedArgs, err := parseSpawnArgs(args)
-		if err != nil {
-			return spawnCompleteMsg{err: err}
-		}
-		if len(parsedArgs) == 0 {
-			return spawnCompleteMsg{err: fmt.Errorf("no spawn arguments provided")}
 		}
 
 		cmd := exec.Command(exe, append([]string{"spawn"}, parsedArgs...)...)

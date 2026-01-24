@@ -226,10 +226,12 @@ func (m Model) renderSessionRow(index int) string {
 		displayName = strings.TrimPrefix(s.Name, tmux.SessionPrefix)
 	}
 
-	// Prefix for orchestrator or child
+	// Prefix for orchestrator, child, or PTY
 	prefix := ""
 	if s.IsOrchestrator {
 		prefix = IndicatorOrchestra + " "
+	} else if s.IsPTY {
+		prefix = IndicatorPTY + " "
 	} else if s.ParentSessionID != "" {
 		prefix = IndicatorChild + " "
 	}

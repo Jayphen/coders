@@ -121,6 +121,7 @@ const (
 	IndicatorSelected     = "❯"
 	IndicatorOrchestra    = "🎯"
 	IndicatorChild        = "├─"
+	IndicatorPTY          = "⚡" // Direct PTY session (no tmux)
 )
 
 // Progress bar characters

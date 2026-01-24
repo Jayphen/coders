@@ -12,6 +12,8 @@ type Session struct {
 	CreatedAt       *time.Time         `json:"createdAt,omitempty"`
 	ParentSessionID string             `json:"parentSessionId,omitempty"`
 	IsOrchestrator  bool               `json:"isOrchestrator"`
+	IsPTY           bool               `json:"isPTY"`           // True if this is a direct PTY session (not tmux)
+	PTYSessionID    string             `json:"ptySessionId"`    // Internal PTY session ID for SessionManager lookup
 	HeartbeatStatus HeartbeatStatus    `json:"heartbeatStatus,omitempty"`
 	HealthCheck     *HealthCheckResult `json:"healthCheck,omitempty"`
 	LastActivity    *time.Time         `json:"lastActivity,omitempty"`
