@@ -80,18 +80,18 @@ type OllamaConfig struct {
 
 // Default configuration values
 const (
-	DefaultDefaultTool        = "claude"
-	DefaultHeartbeatInterval  = 30 * time.Second
-	DefaultRedisURL           = "redis://localhost:6379"
-	DefaultDashboardPort      = 3000
-	DefaultDefaultModel       = ""
-	DefaultDefaultHeartbeat   = true
-	DefaultLogLevel           = "info"
-	DefaultLogJSON            = true
-	DefaultLogMaxSize         = 10   // 10 MB
-	DefaultLogMaxBackups      = 5
-	DefaultLogMaxAge          = 7    // 7 days
-	DefaultLogCompress        = true
+	DefaultDefaultTool       = "claude"
+	DefaultHeartbeatInterval = 30 * time.Second
+	DefaultRedisURL          = "redis://localhost:6379"
+	DefaultDashboardPort     = 3000
+	DefaultDefaultModel      = ""
+	DefaultDefaultHeartbeat  = true
+	DefaultLogLevel          = "info"
+	DefaultLogJSON           = true
+	DefaultLogMaxSize        = 10 // 10 MB
+	DefaultLogMaxBackups     = 5
+	DefaultLogMaxAge         = 7 // 7 days
+	DefaultLogCompress       = true
 )
 
 var (

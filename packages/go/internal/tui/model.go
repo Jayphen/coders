@@ -74,7 +74,7 @@ type viewState struct {
 	loading        bool
 	err            string // error message text
 	statusMessage  string
-	statusExpired  bool   // whether status message should be shown
+	statusExpired  bool // whether status message should be shown
 	confirmKill    bool
 	spawnMode      bool
 	spawnInput     string

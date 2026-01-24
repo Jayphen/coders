@@ -3,6 +3,7 @@ package session
 import (
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
@@ -35,8 +36,8 @@ func (m *Manager) CreateSession(tool, task, cwd string) (*Session, error) {
 		cmd.Dir = cwd
 	}
 
-	// Set environment variables for the task
-	cmd.Env = append(cmd.Env, fmt.Sprintf("CODERS_TASK=%s", task))
+	// Inherit current environment and add task variable
+	cmd.Env = append(os.Environ(), fmt.Sprintf("CODERS_TASK=%s", task))
 
 	// Start the command with a PTY
 	ptmx, err := pty.Start(cmd)

@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	clientOnce     sync.Once
+	clientOnce      sync.Once
 	singletonClient *Client
-	clientErr      error
+	clientErr       error
 )
 
 const (

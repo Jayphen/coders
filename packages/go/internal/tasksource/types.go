@@ -20,11 +20,11 @@ const (
 type TaskPriority int
 
 const (
-	PriorityCritical  TaskPriority = 0 // P0
-	PriorityHigh      TaskPriority = 1 // P1
-	PriorityMedium    TaskPriority = 2 // P2
-	PriorityLow       TaskPriority = 3 // P3
-	PriorityBacklog   TaskPriority = 4 // P4
+	PriorityCritical TaskPriority = 0 // P0
+	PriorityHigh     TaskPriority = 1 // P1
+	PriorityMedium   TaskPriority = 2 // P2
+	PriorityLow      TaskPriority = 3 // P3
+	PriorityBacklog  TaskPriority = 4 // P4
 )
 
 // SourceType identifies which system the task originated from.
@@ -52,12 +52,12 @@ type Task struct {
 	SourceMeta Metadata   `json:"sourceMeta"` // Source-specific metadata
 
 	// Optional fields
-	CreatedAt  *time.Time `json:"createdAt,omitempty"`
-	UpdatedAt  *time.Time `json:"updatedAt,omitempty"`
-	Assignee   string     `json:"assignee,omitempty"`
-	Labels     []string   `json:"labels,omitempty"`
-	BlockedBy  []string   `json:"blockedBy,omitempty"` // IDs of blocking tasks
-	Blocks     []string   `json:"blocks,omitempty"`    // IDs of tasks this blocks
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
+	UpdatedAt *time.Time `json:"updatedAt,omitempty"`
+	Assignee  string     `json:"assignee,omitempty"`
+	Labels    []string   `json:"labels,omitempty"`
+	BlockedBy []string   `json:"blockedBy,omitempty"` // IDs of blocking tasks
+	Blocks    []string   `json:"blocks,omitempty"`    // IDs of tasks this blocks
 }
 
 // Metadata stores source-specific data.
@@ -75,12 +75,12 @@ type TaskFilter struct {
 
 // TaskUpdate contains fields to update on a task.
 type TaskUpdate struct {
-	Status      *TaskStatus   `json:"status,omitempty"`
-	Priority    *TaskPriority `json:"priority,omitempty"`
-	Assignee    *string       `json:"assignee,omitempty"`
-	AddLabels   []string      `json:"addLabels,omitempty"`
-	RemoveLabels []string     `json:"removeLabels,omitempty"`
-	Description *string       `json:"description,omitempty"`
+	Status       *TaskStatus   `json:"status,omitempty"`
+	Priority     *TaskPriority `json:"priority,omitempty"`
+	Assignee     *string       `json:"assignee,omitempty"`
+	AddLabels    []string      `json:"addLabels,omitempty"`
+	RemoveLabels []string      `json:"removeLabels,omitempty"`
+	Description  *string       `json:"description,omitempty"`
 }
 
 // SourceInfo provides metadata about a task source.

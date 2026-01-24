@@ -57,6 +57,11 @@ func (b *OutputBuffer) Append(data []byte) {
 	stripped := ansi.Strip(string(data))
 	text := b.partialLine + string(stripped)
 
+	// Handle empty input
+	if len(text) == 0 {
+		return
+	}
+
 	// Handle different line ending styles (\n, \r\n, \r)
 	// Replace \r\n with \n first
 	text = strings.ReplaceAll(text, "\r\n", "\n")
@@ -156,6 +161,13 @@ func (s *Session) SetMetadata(key, value string) {
 		s.metadata = make(map[string]string)
 	}
 	s.metadata[key] = value
+}
+
+// PTY returns the PTY file for direct I/O (use with caution)
+func (s *Session) PTY() *os.File {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.pty
 }
 
 // Write writes data to the PTY (sends input to the running process)

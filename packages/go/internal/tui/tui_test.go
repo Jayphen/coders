@@ -47,12 +47,12 @@ func TestNewModel(t *testing.T) {
 // TestKeyboardNavigation tests up/down and j/k navigation keys.
 func TestKeyboardNavigation(t *testing.T) {
 	tests := []struct {
-		name           string
-		sessions       []types.Session
-		initialIndex   int
-		key            string
-		expectedIndex  int
-		shouldChange   bool
+		name          string
+		sessions      []types.Session
+		initialIndex  int
+		key           string
+		expectedIndex int
+		shouldChange  bool
 	}{
 		{
 			name: "down arrow moves selection down",
@@ -163,12 +163,12 @@ func TestKeyboardNavigation(t *testing.T) {
 // TestSpawnDialog tests the spawn dialog interaction.
 func TestSpawnDialog(t *testing.T) {
 	tests := []struct {
-		name            string
-		key             string
-		inSpawnMode     bool
-		expectedMode    bool
-		shouldTrigger   bool
-		description     string
+		name          string
+		key           string
+		inSpawnMode   bool
+		expectedMode  bool
+		shouldTrigger bool
+		description   string
 	}{
 		{
 			name:          "s key opens spawn dialog",
@@ -356,11 +356,11 @@ func TestConfirmKillDialog(t *testing.T) {
 // TestPreviewFocus tests tab key for preview focus.
 func TestPreviewFocus(t *testing.T) {
 	tests := []struct {
-		name           string
-		initialFocus   bool
-		key            string
-		expectedFocus  bool
-		description    string
+		name          string
+		initialFocus  bool
+		key           string
+		expectedFocus bool
+		description   string
 	}{
 		{
 			name:          "tab from main view focuses preview",
@@ -401,9 +401,9 @@ func TestPreviewFocus(t *testing.T) {
 // TestSessionListRendering tests the rendering of session lists.
 func TestSessionListRendering(t *testing.T) {
 	tests := []struct {
-		name     string
-		sessions []types.Session
-		expected []string // strings that should appear in output
+		name        string
+		sessions    []types.Session
+		expected    []string // strings that should appear in output
 		notExpected []string // strings that should not appear
 	}{
 		{

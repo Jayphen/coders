@@ -82,17 +82,17 @@ const (
 
 // HealthCheckResult contains the results of a health check for a session.
 type HealthCheckResult struct {
-	SessionID       string       `json:"sessionId"`
-	Timestamp       int64        `json:"timestamp"`
-	Status          HealthStatus `json:"status"`
-	HeartbeatAge    int64        `json:"heartbeatAgeMs,omitempty"`    // Milliseconds since last heartbeat
-	OutputHash      string       `json:"outputHash,omitempty"`        // Hash of recent pane output for change detection
-	OutputStaleFor  int64        `json:"outputStaleForMs,omitempty"`  // How long output has been unchanged
-	ProcessRunning  bool         `json:"processRunning"`              // Whether tmux pane process is alive
-	TmuxAlive       bool         `json:"tmuxAlive"`                   // Whether tmux session exists
-	Message         string       `json:"message,omitempty"`           // Human-readable status message
-	LastOutputHash  string       `json:"lastOutputHash,omitempty"`    // Previous output hash for comparison
-	LastCheckTime   int64        `json:"lastCheckTime,omitempty"`     // When last check was performed
+	SessionID      string       `json:"sessionId"`
+	Timestamp      int64        `json:"timestamp"`
+	Status         HealthStatus `json:"status"`
+	HeartbeatAge   int64        `json:"heartbeatAgeMs,omitempty"`   // Milliseconds since last heartbeat
+	OutputHash     string       `json:"outputHash,omitempty"`       // Hash of recent pane output for change detection
+	OutputStaleFor int64        `json:"outputStaleForMs,omitempty"` // How long output has been unchanged
+	ProcessRunning bool         `json:"processRunning"`             // Whether tmux pane process is alive
+	TmuxAlive      bool         `json:"tmuxAlive"`                  // Whether tmux session exists
+	Message        string       `json:"message,omitempty"`          // Human-readable status message
+	LastOutputHash string       `json:"lastOutputHash,omitempty"`   // Previous output hash for comparison
+	LastCheckTime  int64        `json:"lastCheckTime,omitempty"`    // When last check was performed
 }
 
 // HealthCheckSummary provides an overview of all session health.
@@ -131,19 +131,19 @@ var ToolColors = map[string]string{
 
 // SessionState stores the state needed to restart a crashed session.
 type SessionState struct {
-	SessionID       string `json:"sessionId"`
-	SessionName     string `json:"sessionName"`
-	Tool            string `json:"tool"`
-	Task            string `json:"task"`
-	Cwd             string `json:"cwd"`
-	Model           string `json:"model,omitempty"`
-	UseOllama       bool   `json:"useOllama,omitempty"`
+	SessionID        string `json:"sessionId"`
+	SessionName      string `json:"sessionName"`
+	Tool             string `json:"tool"`
+	Task             string `json:"task"`
+	Cwd              string `json:"cwd"`
+	Model            string `json:"model,omitempty"`
+	UseOllama        bool   `json:"useOllama,omitempty"`
 	HeartbeatEnabled bool   `json:"heartbeatEnabled"`
-	RestartOnCrash  bool   `json:"restartOnCrash"`
-	RestartCount    int    `json:"restartCount"`
-	MaxRestarts     int    `json:"maxRestarts"`
-	CreatedAt       int64  `json:"createdAt"`
-	LastRestartAt   int64  `json:"lastRestartAt,omitempty"`
+	RestartOnCrash   bool   `json:"restartOnCrash"`
+	RestartCount     int    `json:"restartCount"`
+	MaxRestarts      int    `json:"maxRestarts"`
+	CreatedAt        int64  `json:"createdAt"`
+	LastRestartAt    int64  `json:"lastRestartAt,omitempty"`
 }
 
 // CrashEvent records when a session crashed.

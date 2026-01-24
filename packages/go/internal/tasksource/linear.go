@@ -16,10 +16,10 @@ const linearAPIURL = "https://api.linear.app/graphql"
 
 // LinearSource implements TaskSource for Linear issues.
 type LinearSource struct {
-	apiKey  string
-	teamID  string
-	client  *http.Client
-	info    SourceInfo
+	apiKey string
+	teamID string
+	client *http.Client
+	info   SourceInfo
 }
 
 // LinearConfig holds configuration for Linear source.
