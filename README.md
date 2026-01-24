@@ -37,7 +37,14 @@ claude plugin install coders@coders
 
 The `coders` binary provides a terminal UI and CLI tools for managing sessions.
 
-#### Install via Script (Recommended)
+#### Install via Homebrew (macOS)
+
+```bash
+brew tap Jayphen/coders
+brew install coders
+```
+
+#### Install via Script (Linux/macOS)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Jayphen/coders/go-rewrite/packages/go/install.sh | bash
