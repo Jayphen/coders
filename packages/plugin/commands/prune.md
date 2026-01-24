@@ -6,11 +6,7 @@ description: Prune orphaned coder processes
 
 Execute:
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js prune $ARGUMENTS
-```
-CLI alternative:
-```bash
-./bin/coders prune $ARGUMENTS
+${CLAUDE_PLUGIN_ROOT}/bin/coders prune $ARGUMENTS
 ```
 
 List or terminate orphaned `claude` and `heartbeat.js` processes that are no longer attached to tmux sessions.

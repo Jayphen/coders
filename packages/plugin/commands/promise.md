@@ -6,7 +6,7 @@ description: Publish a completion promise for this coder session
 
 Execute:
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js promise $ARGUMENTS
+${CLAUDE_PLUGIN_ROOT}/bin/coders promise $ARGUMENTS
 ```
 
 Mark the current session as completed with a summary of what was accomplished. This notifies the orchestrator and updates the dashboard/TUI to show this session as "completed".

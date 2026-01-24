@@ -6,11 +6,7 @@ description: Kill a coder session
 
 Execute:
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js kill $ARGUMENTS
-```
-CLI alternative:
-```bash
-./bin/coders kill $ARGUMENTS
+${CLAUDE_PLUGIN_ROOT}/bin/coders kill $ARGUMENTS
 ```
 
 Terminate an active tmux session spawned by the coders plugin.

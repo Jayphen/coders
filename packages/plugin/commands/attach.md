@@ -6,11 +6,7 @@ description: Attach to a coder session
 
 Execute:
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js attach $ARGUMENTS
-```
-CLI alternative:
-```bash
-./bin/coders attach $ARGUMENTS
+${CLAUDE_PLUGIN_ROOT}/bin/coders attach $ARGUMENTS
 ```
 
 Attach to an existing tmux session spawned by the coders plugin.

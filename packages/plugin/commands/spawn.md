@@ -6,11 +6,7 @@ description: Spawn an AI coding assistant in a new tmux session
 
 Execute:
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js spawn $ARGUMENTS
-```
-CLI alternative:
-```bash
-./bin/coders spawn $ARGUMENTS
+${CLAUDE_PLUGIN_ROOT}/bin/coders spawn $ARGUMENTS
 ```
 
 Spawn Claude, Gemini, Codex, or OpenCode in an isolated tmux window with optional git worktree.

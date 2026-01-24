@@ -6,11 +6,7 @@ description: Restart the Coders dashboard server
 
 Execute:
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/skills/coders/scripts/main.js restart-dashboard
-```
-CLI alternative:
-```bash
-./bin/coders restart-dashboard
+${CLAUDE_PLUGIN_ROOT}/bin/coders restart-dashboard
 ```
 
 Stops the running dashboard server (if any) and starts a fresh instance, then opens it in your browser.

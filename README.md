@@ -9,7 +9,7 @@ This is a monorepo containing:
 | Package | Description | |
 |---------|-------------|---|
 | [`@jayphen/coders`](./packages/plugin) | Claude Code plugin for spawning AI sessions | [Install via Claude](https://github.com/Jayphen/coders#claude-code-plugin-recommended) |
-| [`@jayphen/coders-tui`](./packages/tui) | Terminal UI for managing sessions | [![npm](https://img.shields.io/npm/v/@jayphen/coders-tui)](https://www.npmjs.com/package/@jayphen/coders-tui) |
+| [`coders-tui`](./packages/go) | Go-based CLI and TUI for managing sessions | Built from source |
 
 ## Quick Start
 
@@ -33,14 +33,52 @@ claude plugin install coders@coders
 /coders:restore
 ```
 
-### Terminal UI (Optional)
+### Go CLI & TUI (Optional)
+
+The `coders` binary provides a terminal UI and CLI tools for managing sessions.
+
+#### Install via Script (Recommended)
 
 ```bash
-# Install the TUI globally
-npm install -g @jayphen/coders-tui
+curl -fsSL https://raw.githubusercontent.com/Jayphen/coders/go-rewrite/packages/go/install.sh | bash
+```
 
-# Run it
-coders-tui
+This script:
+- Detects your OS (macOS/Linux) and architecture (amd64/arm64)
+- Downloads the latest release from GitHub
+- Installs to `/usr/local/bin/coders` (customize with `INSTALL_DIR`)
+
+#### Download from GitHub Releases
+
+1. Visit [GitHub Releases](https://github.com/Jayphen/coders/releases/latest)
+2. Download the binary for your platform:
+   - `coders-darwin-amd64` (macOS Intel)
+   - `coders-darwin-arm64` (macOS Apple Silicon)
+   - `coders-linux-amd64` (Linux x86_64)
+   - `coders-linux-arm64` (Linux ARM64)
+3. Make it executable and move to your PATH:
+   ```bash
+   chmod +x coders-*
+   sudo mv coders-* /usr/local/bin/coders
+   ```
+
+#### Build from Source
+
+Requires Go 1.21+
+
+```bash
+cd packages/go
+make build    # Creates ./coders-tui
+make install  # Installs to /usr/local/bin
+```
+
+#### Usage
+
+```bash
+coders --help         # View available commands
+coders tui            # Launch the TUI
+coders spawn <tool>   # Spawn a new session
+coders list           # List all sessions
 ```
 
 ```
@@ -84,41 +122,46 @@ coders/
 │   │   ├── bin/                # CLI wrapper
 │   │   └── package.json
 │   │
-│   └── tui/                    # Terminal UI (distributed separately)
-│       ├── src/
-│       │   ├── components/     # Ink React components
-│       │   └── app.tsx
-│       └── package.json
+│   └── go/                     # Go implementation (TUI, CLI, orchestrator)
+│       ├── cmd/coders/         # Main entry point
+│       ├── internal/           # Internal packages
+│       │   ├── config/         # Configuration management
+│       │   ├── logging/        # Structured logging
+│       │   ├── tmux/           # Tmux integration
+│       │   └── tui/            # Terminal UI (Bubble Tea)
+│       ├── Makefile
+│       └── go.mod
 │
-├── dev/                        # Development only (not distributed)
-│   ├── test/                   # Test files
-│   ├── notes/                  # Dev documentation
-│   └── hooks/                  # Git hooks
-│
-├── package.json                # Workspace root
+├── package.json                # Workspace root (plugin dependencies)
 └── pnpm-workspace.yaml
 ```
 
 ## Development
 
 ```bash
-# Install dependencies
+# Install plugin dependencies
 pnpm install
 
 # Test the plugin locally
 pnpm plugin:test
 
-# Run TUI in dev mode
-pnpm dev:tui
+# Build and test the Go TUI/CLI
+cd packages/go
+make build
+./coders-tui --help
+
+# Run the TUI
+./coders-tui tui
 
 # Run tests
-pnpm test
+make test
 ```
 
 ## Documentation
 
 - [Plugin README](./packages/plugin/README.md) - Full plugin documentation
-- [TUI README](./packages/tui/README.md) - Terminal UI documentation
+- [Go TUI README](./packages/go/README.md) - Go implementation documentation
+- [CLAUDE.md](./CLAUDE.md) - Project guide and deployment instructions
 
 ## License
 
