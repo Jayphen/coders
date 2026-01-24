@@ -32,8 +32,10 @@ type Model struct {
 	previewLines   int
 	previewFocus   bool
 	previewInput   textinput.Model
-	passthroughMode bool           // When true, forward raw keystrokes to tmux
-	lastEscTime     time.Time      // Track last Esc press for double-Esc detection
+	passthroughMode    bool                    // When true, forward raw keystrokes to tmux
+	lastEscTime        time.Time               // Track last Esc press for double-Esc detection
+	controlConn        *tmux.ControlConnection // Persistent connection for low-latency passthrough
+	passthroughPending bool                    // True if a refresh is already scheduled
 
 	// Preview caching - avoid re-splitting on every render
 	previewSplitLines []string
@@ -194,6 +196,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		previewCmd := m.startPreviewFetch()
 		return m, tea.Batch(m.fetchSessions, previewCmd, m.tick())
 
+	case passthroughTickMsg:
+		// Single preview refresh after keystroke in passthrough mode
+		m.passthroughPending = false
+		if m.passthroughMode {
+			previewCmd := m.startPreviewFetch()
+			return m, previewCmd
+		}
+		return m, nil
+
 	case statusClearMsg:
 		if time.Now().After(m.statusExpiry) {
 			m.statusMessage = ""
@@ -220,11 +231,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.previewSplitLines = nil
 			m.previewSplitText = ""
 		} else {
-			m.previewErr = nil
-			m.preview = msg.output
-			// Cache split lines to avoid re-splitting on every render
-			m.previewSplitLines = strings.Split(msg.output, "\n")
-			m.previewSplitText = msg.output
+			// Only update if content actually changed (prevents flicker during passthrough)
+			if m.preview != msg.output {
+				m.previewErr = nil
+				m.preview = msg.output
+				// Cache split lines to avoid re-splitting on every render
+				m.previewSplitLines = strings.Split(msg.output, "\n")
+				m.previewSplitText = msg.output
+			}
 		}
 		return m, nil
 
@@ -307,24 +321,49 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if msg.String() == "shift+tab" {
 			m.passthroughMode = !m.passthroughMode
 			if m.passthroughMode {
+				// Create control connection for low-latency passthrough
+				s := m.selectedSession()
+				if s != nil {
+					conn, err := tmux.NewControlConnection(s.Name)
+					if err != nil {
+						m.setStatus(fmt.Sprintf("Failed to enter passthrough: %v", err))
+						m.passthroughMode = false
+						return m, nil
+					}
+					m.controlConn = conn
+				}
 				m.setStatus("Passthrough mode enabled - keystrokes forwarded to session (Shift+Tab to exit)")
+				return m, nil
 			} else {
+				// Close control connection
+				if m.controlConn != nil {
+					m.controlConn.Close()
+					m.controlConn = nil
+				}
 				m.setStatus("Passthrough mode disabled")
 			}
 			return m, nil
 		}
 
-		// Handle passthrough mode - forward raw keystrokes
+		// Handle passthrough mode - forward raw keystrokes via control connection
 		if m.passthroughMode {
 			s := m.selectedSession()
-			if s == nil {
+			if s == nil || m.controlConn == nil {
 				m.setStatus("No session selected")
 				m.passthroughMode = false
+				if m.controlConn != nil {
+					m.controlConn.Close()
+					m.controlConn = nil
+				}
 				return m, nil
 			}
 
 			// Allow Ctrl+C to quit even in passthrough mode
 			if msg.String() == "ctrl+c" {
+				if m.controlConn != nil {
+					m.controlConn.Close()
+					m.controlConn = nil
+				}
 				return m, tea.Quit
 			}
 
@@ -334,6 +373,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if !m.lastEscTime.IsZero() && now.Sub(m.lastEscTime) < 500*time.Millisecond {
 					// Double-Esc detected - exit passthrough mode
 					m.passthroughMode = false
+					if m.controlConn != nil {
+						m.controlConn.Close()
+						m.controlConn = nil
+					}
 					m.setStatus("Passthrough mode disabled")
 					m.lastEscTime = time.Time{}
 					return m, nil
@@ -342,9 +385,18 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				// Still forward the first Esc to the session
 			}
 
-			// Forward the keystroke to tmux
-			if err := tmux.SendRawKey(s.Name, msg.String()); err != nil {
-				m.setStatus(fmt.Sprintf("Send key failed: %v", err))
+			// Forward the keystroke via control connection (low latency)
+			if err := m.controlConn.SendKey(msg.String()); err != nil {
+				// Don't show status during passthrough to prevent flicker
+				_ = err
+			}
+			// Only schedule refresh if one isn't already pending (debounce)
+			if !m.passthroughPending {
+				m.passthroughPending = true
+				m.statusMessage = ""
+				return m, tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+					return passthroughTickMsg(t)
+				})
 			}
 			return m, nil
 		}
@@ -473,7 +525,7 @@ func (m Model) currentViewState() viewState {
 		passthroughMode: m.passthroughMode,
 		loading:         m.loading,
 		statusMessage:   m.statusMessage,
-		statusExpired:   time.Now().After(m.statusExpiry),
+		statusExpired:   m.statusMessage == "" || time.Now().After(m.statusExpiry),
 		confirmKill:     m.confirmKill,
 		spawnMode:       m.spawnMode,
 		spawning:        m.spawning,
@@ -566,7 +618,15 @@ func (m *Model) View() string {
 	b.WriteString("\n")
 	b.WriteString(m.renderStatusBar())
 
-	rendered := lipgloss.NewStyle().Padding(1).Render(b.String())
+	content := lipgloss.NewStyle().Padding(1).Render(b.String())
+
+	// Force fixed height to prevent layout shifts during passthrough
+	var rendered string
+	if m.height > 0 && m.width > 0 {
+		rendered = lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, content)
+	} else {
+		rendered = content
+	}
 
 	// Cache the rendered view and state
 	m.cachedView = rendered
@@ -623,6 +683,15 @@ func (m *Model) startPreviewFetch() tea.Cmd {
 func (m Model) tick() tea.Cmd {
 	return tea.Tick(5*time.Second, func(t time.Time) tea.Msg {
 		return tickMsg(t)
+	})
+}
+
+// passthroughTickMsg is used for fast preview refresh during passthrough mode
+type passthroughTickMsg time.Time
+
+func (m Model) passthroughTick() tea.Cmd {
+	return tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
+		return passthroughTickMsg(t)
 	})
 }
 

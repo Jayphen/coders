@@ -3,10 +3,12 @@ package tmux
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Jayphen/coders/internal/types"
@@ -299,10 +301,109 @@ func SendKeys(sessionName, keys string) error {
 	return exec.Command("tmux", "send-keys", "-t", sessionName, "Enter").Run()
 }
 
+// ControlConnection maintains a persistent tmux control mode connection for low-latency key sending.
+type ControlConnection struct {
+	sessionName string
+	cmd         *exec.Cmd
+	stdin       io.WriteCloser
+	mu          sync.Mutex
+}
+
+// NewControlConnection creates a persistent control mode connection to a tmux session.
+// This is much faster than spawning a new process for each keystroke.
+func NewControlConnection(sessionName string) (*ControlConnection, error) {
+	cmd := exec.Command("tmux", "-C", "attach", "-t", sessionName)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stdin pipe: %w", err)
+	}
+
+	// Discard stdout/stderr - we don't need the control mode output
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+
+	if err := cmd.Start(); err != nil {
+		stdin.Close()
+		return nil, fmt.Errorf("failed to start control mode: %w", err)
+	}
+
+	return &ControlConnection{
+		sessionName: sessionName,
+		cmd:         cmd,
+		stdin:       stdin,
+	}, nil
+}
+
+// SendKey sends a keystroke through the control connection with minimal latency.
+func (c *ControlConnection) SendKey(key string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.stdin == nil {
+		return fmt.Errorf("control connection closed")
+	}
+
+	// Map of Bubbletea key strings to tmux key names
+	specialKeys := map[string]string{
+		"enter":     "Enter",
+		"tab":       "Tab",
+		"esc":       "Escape",
+		"backspace": "BSpace",
+		"delete":    "DC",
+		"up":        "Up",
+		"down":      "Down",
+		"left":      "Left",
+		"right":     "Right",
+		"home":      "Home",
+		"end":       "End",
+		"pgup":      "PageUp",
+		"pgdown":    "PageDown",
+		"space":     "Space",
+	}
+
+	var cmd string
+	if tmuxKey, ok := specialKeys[key]; ok {
+		cmd = fmt.Sprintf("send-keys %s\n", tmuxKey)
+	} else if strings.HasPrefix(key, "ctrl+") {
+		letter := strings.TrimPrefix(key, "ctrl+")
+		if len(letter) == 1 {
+			cmd = fmt.Sprintf("send-keys C-%s\n", letter)
+		} else {
+			return nil // Ignore unknown ctrl combinations
+		}
+	} else {
+		// For regular characters, send literally with -l flag
+		// Escape special characters for tmux
+		escaped := strings.ReplaceAll(key, "\\", "\\\\")
+		escaped = strings.ReplaceAll(escaped, "\"", "\\\"")
+		cmd = fmt.Sprintf("send-keys -l \"%s\"\n", escaped)
+	}
+
+	_, err := c.stdin.Write([]byte(cmd))
+	return err
+}
+
+// Close closes the control connection.
+func (c *ControlConnection) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.stdin != nil {
+		c.stdin.Close()
+		c.stdin = nil
+	}
+	if c.cmd != nil && c.cmd.Process != nil {
+		c.cmd.Process.Kill()
+		c.cmd.Wait()
+	}
+	return nil
+}
+
 // SendRawKey sends a single raw keystroke to a tmux session without interpretation.
 // This is used for passthrough mode where individual keystrokes are forwarded in real-time.
 // For literal characters (a-z, 0-9, etc.), use -l flag to send them literally.
 // For special keys (Tab, Enter, Escape, etc.), send them as named keys without -l.
+// NOTE: This spawns a process per keystroke. For low-latency passthrough, use ControlConnection instead.
 func SendRawKey(sessionName, key string) error {
 	// Map of Bubbletea key strings to tmux key names
 	specialKeys := map[string]string{
