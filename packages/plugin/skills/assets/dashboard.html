@@ -106,6 +106,33 @@
       padding-right: 6px;
     }
 
+    .session-section {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--tui-muted);
+      margin: 6px 0 2px;
+    }
+
+    .session-section::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--tui-border);
+      opacity: 0.6;
+    }
+
+    .session-section.active {
+      color: #8fb8ff;
+    }
+
+    .session-section.completed {
+      color: #6fcf97;
+    }
+
     .session-card {
       background: #141a22;
       border: 1px solid var(--tui-border);
@@ -1587,6 +1614,25 @@
         `;
       }
 
+      const sessionOrder = new Map(regularSessions.map((session, index) => [session.sessionId, index]));
+      const sortByCreatedAtDesc = (a, b) => {
+        const aTime = a.createdAt || 0;
+        const bTime = b.createdAt || 0;
+        if (aTime !== bTime) return bTime - aTime;
+        return (sessionOrder.get(a.sessionId) || 0) - (sessionOrder.get(b.sessionId) || 0);
+      };
+
+      const activeSessions = regularSessions
+        .filter(session => !session.hasPromise)
+        .sort(sortByCreatedAtDesc);
+      const completedSessions = regularSessions
+        .filter(session => session.hasPromise)
+        .sort(sortByCreatedAtDesc);
+
+      function renderSectionHeader(label, count, className) {
+        return `<div class="session-section ${className}">${label} (${count})</div>`;
+      }
+
       function renderSessionCard(session) {
         const timeSince = session.lastSeen
           ? formatTimeSince(Date.now() - session.lastSeen)
@@ -1689,7 +1735,16 @@
       }
 
       if (regularSessions.length > 0) {
-        grid.innerHTML = regularSessions.map(session => renderSessionCard(session)).join('');
+        let markup = '';
+        if (activeSessions.length > 0) {
+          markup += renderSectionHeader('Active', activeSessions.length, 'active');
+          markup += activeSessions.map(session => renderSessionCard(session)).join('');
+        }
+        if (completedSessions.length > 0) {
+          markup += renderSectionHeader('Completed', completedSessions.length, 'completed');
+          markup += completedSessions.map(session => renderSessionCard(session)).join('');
+        }
+        grid.innerHTML = markup;
       }
 
       const activeIds = new Set(regularSessions.map(s => s.sessionId));

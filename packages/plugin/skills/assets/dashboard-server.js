@@ -209,15 +209,20 @@ function getFormattedSessionList() {
     };
   });
 
-  // Sort sessions: orchestrator first, then by creation time (oldest first, newest at bottom)
+  // Sort sessions to match TUI: orchestrator first, then active, then completed (newest first)
   return sessionList.sort((a, b) => {
-    if (a.isOrchestrator) return -1;
-    if (b.isOrchestrator) return 1;
-    // Sort by creation time (oldest first, so newest at the bottom)
+    const priority = (session) => {
+      if (session.isOrchestrator) return 0;
+      return session.hasPromise ? 2 : 1;
+    };
+    const aPriority = priority(a);
+    const bPriority = priority(b);
+    if (aPriority !== bPriority) return aPriority - bPriority;
+    // Sort by creation time (newest first)
     // Fall back to sessionId comparison if no createdAt timestamp
     const aTime = a.createdAt || 0;
     const bTime = b.createdAt || 0;
-    if (aTime !== bTime) return aTime - bTime;
+    if (aTime !== bTime) return bTime - aTime;
     return a.sessionId.localeCompare(b.sessionId);
   });
 }
