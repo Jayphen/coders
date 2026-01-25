@@ -21,8 +21,14 @@
     }
 
     .container {
-      max-width: 1400px;
+      max-width: 100vw;
       margin: 0 auto;
+      overflow-x: hidden;
+    }
+
+    img, video, canvas {
+      max-width: 100%;
+      height: auto;
     }
 
     h1 {
@@ -36,19 +42,46 @@
       margin-bottom: 30px;
     }
 
-    .sessions-grid {
+    .dashboard-layout {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-      gap: 20px;
-      margin-bottom: 30px;
+      grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    .sessions-pane,
+    .preview-pane {
+      background: #0f141b;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .preview-pane {
+      min-height: 520px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .sessions-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: calc(100vh - 420px);
+      overflow-y: auto;
+      padding-right: 4px;
     }
 
     .session-card {
       background: #161b22;
       border: 1px solid #30363d;
-      border-radius: 6px;
-      padding: 20px;
-      transition: border-color 0.2s;
+      border-radius: 8px;
+      padding: 14px 16px;
+      transition: border-color 0.2s, background 0.2s;
+      cursor: pointer;
     }
 
     .session-card.stale {
@@ -63,6 +96,33 @@
 
     .session-card:hover {
       border-color: #58a6ff;
+    }
+
+    .session-card.selected {
+      border-color: #58a6ff;
+      background: #1b2330;
+    }
+
+    .session-card.completed {
+      border-color: #2ea043;
+      background: #101a14;
+    }
+
+    .session-card.completed.blocked {
+      border-color: #f85149;
+      background: #1f1113;
+    }
+
+    .session-card.completed.needs-review {
+      border-color: #d29922;
+      background: #201a11;
+    }
+
+    .session-card.completed.selected,
+    .session-card.completed.blocked.selected,
+    .session-card.completed.needs-review.selected {
+      border-color: #58a6ff;
+      background: #1b2330;
     }
 
     .session-card.pulse {
@@ -85,7 +145,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 15px;
+      margin-bottom: 8px;
     }
 
     .session-name {
@@ -148,20 +208,85 @@
       color: #8b949e;
     }
 
+    .session-statuses {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .promise-badge {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      background: #2ea043;
+      color: #fff;
+      letter-spacing: 0.3px;
+    }
+
+    .promise-badge.blocked {
+      background: #da3633;
+    }
+
+    .promise-badge.needs-review {
+      background: #bf8700;
+    }
+
     .session-info {
-      margin-bottom: 15px;
+      margin-bottom: 0;
       font-size: 14px;
       color: #8b949e;
     }
 
     .session-info div {
-      margin-bottom: 5px;
+      margin-bottom: 4px;
+    }
+
+    .session-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      font-size: 12px;
+      color: #6e7681;
+    }
+
+    .session-meta .divider {
+      opacity: 0.4;
     }
 
     .session-task {
       color: #a7b0bb;
       font-size: 13px;
       line-height: 1.4;
+    }
+
+    .promise-summary {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid #30363d;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+      color: #b1bac4;
+    }
+
+    .promise-summary .promise-time {
+      font-size: 11px;
+      color: #8b949e;
+    }
+
+    .promise-summary .promise-text {
+      color: #c9d1d9;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .promise-summary .promise-blockers {
+      color: #f85149;
+      font-size: 12px;
     }
 
     .typing-indicator {
@@ -252,26 +377,71 @@
       background: #0d1117;
       border: 1px solid #30363d;
       border-radius: 6px;
-      padding: 20px;
-      margin-top: 30px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
+    }
+
+    .output-panel.empty .output-content,
+    .output-panel.empty .send-message,
+    .output-panel.empty .send-message-hint,
+    .output-panel.empty .special-keys-section {
       display: none;
     }
 
-    .output-panel.visible {
-      display: block;
+    .output-panel.empty .preview-empty {
+      display: flex;
     }
 
     .output-header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      margin-bottom: 15px;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 0;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #30363d;
     }
 
     .output-title {
       font-size: 18px;
       font-weight: 600;
       color: #58a6ff;
+    }
+
+    .output-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 6px;
+      font-size: 12px;
+      color: #8b949e;
+      align-items: center;
+    }
+
+    .output-meta .meta-divider {
+      opacity: 0.4;
+    }
+
+    .output-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .output-actions button.ghost {
+      background: transparent;
+      border-color: transparent;
+      color: #8b949e;
+    }
+
+    .output-actions button.ghost:hover {
+      border-color: #30363d;
+      color: #c9d1d9;
     }
 
     .close-btn {
@@ -297,9 +467,60 @@
       font-size: 13px;
       line-height: 1.6;
       overflow-x: auto;
-      white-space: pre;
-      max-height: 500px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      flex: 1;
+      min-height: 240px;
+      max-height: none;
       overflow-y: auto;
+    }
+
+    .output-promise {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      background: #0f1a12;
+      border: 1px solid #2ea043;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 13px;
+      color: #c9d1d9;
+    }
+
+    .output-promise.visible {
+      display: flex;
+    }
+
+    .output-promise.blocked {
+      background: #1f1113;
+      border-color: #f85149;
+    }
+
+    .output-promise.needs-review {
+      background: #201a11;
+      border-color: #d29922;
+    }
+
+    .output-promise-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .output-promise-time {
+      font-size: 12px;
+      color: #8b949e;
+    }
+
+    .output-promise-summary {
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .output-promise-blockers {
+      color: #f85149;
+      font-size: 12px;
     }
 
     .send-message {
@@ -326,6 +547,11 @@
     .message-textarea:focus {
       outline: none;
       border-color: #58a6ff;
+    }
+
+    .message-textarea:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
 
     .send-message-hint {
@@ -430,6 +656,7 @@
       align-items: center;
       flex: 1;
       margin-top: 15px;
+      flex-wrap: wrap;
     }
 
     .orchestrator-input-group {
@@ -571,6 +798,11 @@
       gap: 6px;
     }
 
+    .special-key-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     .special-key-btn:hover {
       background: #30363d;
       border-color: #58a6ff;
@@ -653,6 +885,110 @@
       background: #30363d;
       color: #8b949e;
     }
+
+    .preview-empty {
+      display: none;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: #8b949e;
+      padding: 40px 20px;
+      border: 1px dashed #30363d;
+      border-radius: 6px;
+      background: rgba(13, 17, 23, 0.6);
+    }
+
+    .preview-empty h3 {
+      font-size: 18px;
+      color: #c9d1d9;
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 1000px) {
+      .dashboard-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .sessions-grid {
+        max-height: none;
+      }
+    }
+
+    @media (max-width: 768px) {
+      body {
+        padding: 12px;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+
+      .stat-card {
+        padding: 15px;
+        min-width: 100%;
+      }
+
+      .orchestrator-panel {
+        padding: 15px;
+      }
+
+      .orchestrator-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .orchestrator-controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .orchestrator-input-group {
+        flex-direction: column;
+      }
+
+      .output-header {
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .output-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .output-actions button {
+        flex: 1;
+        text-align: center;
+        justify-content: center;
+      }
+
+      .close-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+      }
+
+      .output-panel {
+        position: relative;
+        padding: 12px;
+      }
+
+      .special-keys-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .tool-selector {
+        width: 100%;
+      }
+
+      .tool-selector select {
+        flex: 1;
+      }
+    }
   </style>
 </head>
 <body>
@@ -716,42 +1052,79 @@
       </div>
     </div>
 
-    <hr class="sections-divider">
-    <div class="section-title">Coder Sessions</div>
-
-    <div class="sessions-grid" id="sessions-grid">
-      <div class="empty-state">
-        <h2>No active sessions</h2>
-        <p>Spawn a coder session to get started!</p>
-      </div>
-    </div>
-
-    <div class="output-panel" id="output-panel">
-      <div class="output-header">
-        <div class="output-title" id="output-session-name">Session Output</div>
-        <button class="close-btn" onclick="closeOutput()">×</button>
-      </div>
-      <div class="output-content" id="output-content"></div>
-      <div class="send-message">
-        <textarea class="message-textarea" id="message-input" placeholder="Type a message to send to this session..." rows="1"></textarea>
-        <button onclick="sendMessage()">Send</button>
-      </div>
-      <div class="send-message-hint">Press Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux) to send</div>
-      <div class="special-keys-section">
-        <div class="special-keys-header">
-          <span class="special-keys-title">Special Keys</span>
-          <div class="tool-selector">
-            <select id="tool-filter" onchange="updateSpecialKeys()">
-              <option value="common">Common</option>
-              <option value="claude">Claude Code</option>
-              <option value="gemini">Gemini CLI</option>
-              <option value="codex">Codex CLI</option>
-              <option value="opencode">OpenCode</option>
-            </select>
+    <div class="dashboard-layout">
+      <div class="sessions-pane">
+        <div class="section-title">Coder Sessions</div>
+        <div class="sessions-grid" id="sessions-grid">
+          <div class="empty-state">
+            <h2>No active sessions</h2>
+            <p>Spawn a coder session to get started!</p>
           </div>
         </div>
-        <div class="special-keys-grid" id="special-keys-grid">
-          <!-- Keys populated by JavaScript -->
+      </div>
+
+      <div class="preview-pane">
+        <div class="section-title">Session Preview</div>
+        <div class="output-panel empty" id="output-panel">
+          <div class="output-header">
+            <div>
+              <div class="output-title" id="output-session-name">Session Preview</div>
+              <div class="output-meta" id="output-meta">
+                <span class="status unknown" id="output-status">unknown</span>
+                <span class="meta-divider">•</span>
+                <span id="output-last-seen">Last seen: —</span>
+                <span class="meta-divider">•</span>
+                <span id="output-last-output">Last output: —</span>
+                <span class="meta-divider">•</span>
+                <span id="output-windows">Windows: —</span>
+                <span class="meta-divider">•</span>
+                <span id="output-cwd">📁 —</span>
+              </div>
+            </div>
+            <div class="output-actions">
+              <button class="ghost" id="output-refresh" onclick="refreshOutput()" disabled>Refresh</button>
+              <button id="output-attach" onclick="attachCurrentSession()" disabled>Attach (tmux)</button>
+              <button id="output-kill" onclick="killCurrentSession()" disabled>Kill</button>
+              <button class="close-btn" onclick="closeOutput()" title="Clear selection">×</button>
+            </div>
+          </div>
+          <div class="output-promise" id="output-promise">
+            <div class="output-promise-header">
+              <span class="promise-badge" id="output-promise-status">Completed</span>
+              <span class="output-promise-time" id="output-promise-time">Completed —</span>
+            </div>
+            <div class="output-promise-summary" id="output-promise-summary"></div>
+            <div class="output-promise-blockers" id="output-promise-blockers"></div>
+          </div>
+          <div class="preview-empty" id="preview-empty">
+            <div>
+              <h3>Select a session</h3>
+              <p>Choose a session on the left to view output and controls.</p>
+            </div>
+          </div>
+          <div class="output-content" id="output-content"></div>
+          <div class="send-message">
+            <textarea class="message-textarea" id="message-input" placeholder="Type a message to send to this session..." rows="1" disabled></textarea>
+            <button id="send-message-btn" onclick="sendMessage()" disabled>Send</button>
+          </div>
+          <div class="send-message-hint">Press Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux) to send</div>
+          <div class="special-keys-section">
+            <div class="special-keys-header">
+              <span class="special-keys-title">Special Keys</span>
+              <div class="tool-selector">
+                <select id="tool-filter" onchange="updateSpecialKeys()">
+                  <option value="common">Common</option>
+                  <option value="claude">Claude Code</option>
+                  <option value="gemini">Gemini CLI</option>
+                  <option value="codex">Codex CLI</option>
+                  <option value="opencode">OpenCode</option>
+                </select>
+              </div>
+            </div>
+            <div class="special-keys-grid" id="special-keys-grid">
+              <!-- Keys populated by JavaScript -->
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -845,6 +1218,177 @@
           <span class="key-desc">${k.desc}</span>
         </button>
       `).join('');
+
+      const disabled = !currentSession;
+      grid.querySelectorAll('button').forEach(btn => {
+        btn.disabled = disabled;
+      });
+    }
+
+    function getSessionData(sessionId) {
+      return currentSessionsData.find(s => s.sessionId === sessionId);
+    }
+
+    function buildFallbackSession(sessionId) {
+      return {
+        sessionId,
+        displayName: sessionId === 'coder-orchestrator' ? 'Orchestrator' : null,
+        status: 'unknown',
+        windows: 0,
+        lastSeen: null,
+        lastResponseAt: null,
+        cwd: ''
+      };
+    }
+
+    function setOutputControlsEnabled(enabled) {
+      document.getElementById('message-input').disabled = !enabled;
+      document.getElementById('send-message-btn').disabled = !enabled;
+      document.getElementById('output-refresh').disabled = !enabled;
+      document.getElementById('output-attach').disabled = !enabled;
+      document.getElementById('output-kill').disabled = !enabled;
+      updateSpecialKeys();
+    }
+
+    function setPreviewSession(sessionData, options = {}) {
+      const { preserveInput = false } = options;
+      const panel = document.getElementById('output-panel');
+      panel.classList.remove('empty');
+
+      const title = sessionData.displayName
+        ? `${sessionData.displayName} (${sessionData.sessionId})`
+        : sessionData.sessionId;
+      document.getElementById('output-session-name').textContent = title || 'Session Preview';
+
+      const status = sessionData.status || 'unknown';
+      const statusEl = document.getElementById('output-status');
+      statusEl.textContent = status;
+      statusEl.className = `status ${status}`;
+
+      const timeSince = sessionData.lastSeen
+        ? formatTimeSince(Date.now() - sessionData.lastSeen)
+        : 'Never';
+      const responseSince = sessionData.lastResponseAt
+        ? formatTimeSince(Date.now() - sessionData.lastResponseAt)
+        : 'Never';
+
+      document.getElementById('output-last-seen').textContent = `Last seen: ${timeSince}`;
+      document.getElementById('output-last-output').textContent = `Last output: ${responseSince}`;
+      document.getElementById('output-windows').textContent = `Windows: ${sessionData.windows ?? 0}`;
+
+      const cwdEl = document.getElementById('output-cwd');
+      cwdEl.textContent = sessionData.cwd ? `📁 ${truncatePath(sessionData.cwd)}` : '📁 —';
+      cwdEl.title = sessionData.cwd || '';
+
+      updatePromisePanel(sessionData.promise);
+
+      if (!preserveInput) {
+        document.getElementById('message-input').value = '';
+      }
+
+      // Auto-detect Gemini session to hide text input and select tool
+      const isGemini = sessionData.sessionId.toLowerCase().includes('gemini');
+      const messageBlock = document.querySelector('.send-message');
+      const hintBlock = document.querySelector('.send-message-hint');
+      const toolSelect = document.getElementById('tool-filter');
+
+      if (isGemini) {
+        messageBlock.style.display = 'none';
+        hintBlock.style.display = 'none';
+        if (toolSelect.value !== 'gemini') {
+          toolSelect.value = 'gemini';
+          updateSpecialKeys();
+        }
+      } else {
+        messageBlock.style.display = 'flex';
+        hintBlock.style.display = 'block';
+        // Reset to common if it was stuck on Gemini (optional, but good for UX)
+        // Only reset if we are switching FROM a Gemini session TO a non-Gemini one
+        // and the user hasn't explicitly chosen something else? 
+        // For simplicity, we won't force-reset it to allow manual overrides, 
+        // unless we want to enforce "common" as default.
+        // Let's just leave the tool selector as is for non-Gemini sessions.
+      }
+
+      setOutputControlsEnabled(true);
+    }
+
+    function updatePromisePanel(promise) {
+      const panel = document.getElementById('output-promise');
+      if (!promise) {
+        panel.classList.remove('visible', 'blocked', 'needs-review');
+        document.getElementById('output-promise-summary').textContent = '';
+        document.getElementById('output-promise-time').textContent = 'Completed —';
+        document.getElementById('output-promise-status').textContent = 'Completed';
+        document.getElementById('output-promise-blockers').textContent = '';
+        return;
+      }
+
+      const status = promise.status || 'completed';
+      panel.classList.add('visible');
+      panel.classList.toggle('blocked', status === 'blocked');
+      panel.classList.toggle('needs-review', status === 'needs-review');
+
+      const statusLabel = formatPromiseStatus(status);
+      const timestampLabel = formatTimestamp(promise.timestamp);
+
+      const statusEl = document.getElementById('output-promise-status');
+      statusEl.textContent = statusLabel;
+      statusEl.className = `promise-badge ${status}`;
+
+      document.getElementById('output-promise-time').textContent = `Completed ${timestampLabel}`;
+      document.getElementById('output-promise-summary').textContent = promise.summary || '';
+
+      const blockersEl = document.getElementById('output-promise-blockers');
+      if (status === 'blocked' && promise.blockers && promise.blockers.length > 0) {
+        blockersEl.textContent = `Blockers: ${promise.blockers.join(', ')}`;
+      } else {
+        blockersEl.textContent = '';
+      }
+    }
+
+    function clearPreview() {
+      currentSession = null;
+      const panel = document.getElementById('output-panel');
+      panel.classList.add('empty');
+      document.getElementById('output-session-name').textContent = 'Session Preview';
+      const statusEl = document.getElementById('output-status');
+      statusEl.textContent = 'unknown';
+      statusEl.className = 'status unknown';
+      document.getElementById('output-last-seen').textContent = 'Last seen: —';
+      document.getElementById('output-last-output').textContent = 'Last output: —';
+      document.getElementById('output-windows').textContent = 'Windows: —';
+      const cwdEl = document.getElementById('output-cwd');
+      cwdEl.textContent = '📁 —';
+      cwdEl.title = '';
+      document.getElementById('output-content').innerHTML = '';
+      document.getElementById('message-input').value = '';
+      updatePromisePanel(null);
+      setOutputControlsEnabled(false);
+    }
+
+    function selectSession(sessionId) {
+      const sessionData = getSessionData(sessionId) || buildFallbackSession(sessionId);
+      currentSession = sessionId;
+      setPreviewSession(sessionData);
+      viewOutput(sessionId);
+      renderSessions(currentSessionsData);
+    }
+
+    function refreshOutput() {
+      if (currentSession) {
+        viewOutput(currentSession, true);
+      }
+    }
+
+    function attachCurrentSession() {
+      if (!currentSession) return;
+      attachSession(currentSession);
+    }
+
+    function killCurrentSession() {
+      if (!currentSession) return;
+      killSession(currentSession);
     }
 
     async function sendSpecialKey(key, delay = 0) {
@@ -938,7 +1482,6 @@
             <p>Spawn a coder session to get started!</p>
           </div>
         `;
-        return;
       }
 
       function renderSessionCard(session) {
@@ -967,7 +1510,15 @@
           lastResponseAt: session.lastResponseAt,
           windows: session.windows,
           lastActivity: session.lastActivity,
-          paneId: session.paneId
+          paneId: session.paneId,
+          promise: session.promise
+            ? {
+                status: session.promise.status,
+                timestamp: session.promise.timestamp,
+                summary: session.promise.summary,
+                blockers: session.promise.blockers
+              }
+            : null
         });
         const previousSignature = sessionSignatures.get(session.sessionId);
         const isUpdated = previousSignature && previousSignature !== signature;
@@ -975,6 +1526,28 @@
 
         const heartbeatClass = session.hasHeartbeat ? 'has-heartbeat' : 'no-heartbeat';
         const heartbeatTitle = session.hasHeartbeat ? 'Heartbeat active' : 'No heartbeat';
+        const isSelected = session.sessionId === currentSession;
+        const promise = session.promise;
+        const hasPromise = session.hasPromise && promise;
+        const promiseStatus = hasPromise ? (promise.status || 'completed') : null;
+        const promiseBadge = hasPromise
+          ? `<span class="promise-badge ${promiseStatus}">${formatPromiseStatus(promiseStatus)}</span>`
+          : '';
+        const promiseTime = hasPromise
+          ? `Completed ${formatTimestamp(promise.timestamp)}`
+          : '';
+        const promiseSummary = hasPromise
+          ? `<div class="promise-summary">
+               <div class="promise-time">${escapeHtml(promiseTime)}</div>
+               <div class="promise-text">${escapeHtml(truncateText(promise.summary || '', 160))}</div>
+               ${promiseStatus === 'blocked' && promise.blockers && promise.blockers.length > 0
+                 ? `<div class="promise-blockers">Blockers: ${escapeHtml(promise.blockers.join(', '))}</div>`
+                 : ''}
+             </div>`
+          : '';
+        const promiseClass = hasPromise
+          ? `completed ${promiseStatus === 'completed' ? '' : promiseStatus}`
+          : '';
 
         // Use displayName if available, otherwise fall back to sessionId
         const nameDisplay = session.displayName
@@ -989,36 +1562,46 @@
           : '';
 
         return `
-          <div class="session-card ${isStale ? 'stale' : ''} ${isUpdated ? 'pulse' : ''}" id="session-${session.sessionId.replace(/[^a-zA-Z0-9-]/g, '-')}">
+          <div class="session-card ${promiseClass} ${isStale ? 'stale' : ''} ${isUpdated ? 'pulse' : ''} ${isSelected ? 'selected' : ''}" id="session-${session.sessionId.replace(/[^a-zA-Z0-9-]/g, '-')}" onclick="selectSession('${session.sessionId}')">
             <div class="session-header">
               ${nameDisplay}
-              <div class="status ${session.status}">${session.status}</div>
-            </div>
-            <div class="session-info">
-              ${taskLine}
-              <div>
-                <span class="heartbeat-indicator ${heartbeatClass}" title="${heartbeatTitle}"></span>
-                Last seen: ${timeSince}
+              <div class="session-statuses">
+                <div class="status ${session.status}">${session.status}</div>
+                ${promiseBadge}
               </div>
-              <div>Last output: ${responseSince} ${typingIndicator}</div>
-              <div>Windows: ${session.windows}</div>
-              ${session.cwd ? `<div title="${session.cwd}">📁 ${truncatePath(session.cwd)}</div>` : ''}
             </div>
-            <div class="actions">
-              <button onclick="viewOutput('${session.sessionId}')">View Output</button>
-              <button onclick="attachSession('${session.sessionId}')">Attach (tmux)</button>
-              <button onclick="killSession('${session.sessionId}')">Kill</button>
+            ${taskLine}
+            <div class="session-meta">
+              <span class="heartbeat-indicator ${heartbeatClass}" title="${heartbeatTitle}"></span>
+              <span>Seen ${timeSince}</span>
+              <span class="divider">•</span>
+              <span>Output ${responseSince} ${typingIndicator}</span>
+              <span class="divider">•</span>
+              <span>Windows ${session.windows}</span>
             </div>
+            ${session.cwd ? `<div class="session-meta"><span title="${session.cwd}">📁 ${truncatePath(session.cwd)}</span></div>` : ''}
+            ${promiseSummary}
           </div>
         `;
       }
 
-      grid.innerHTML = regularSessions.map(session => renderSessionCard(session)).join('');
+      if (regularSessions.length > 0) {
+        grid.innerHTML = regularSessions.map(session => renderSessionCard(session)).join('');
+      }
 
       const activeIds = new Set(regularSessions.map(s => s.sessionId));
       for (const sessionId of sessionSignatures.keys()) {
         if (!activeIds.has(sessionId)) {
           sessionSignatures.delete(sessionId);
+        }
+      }
+
+      if (currentSession) {
+        const currentData = getSessionData(currentSession);
+        if (currentData) {
+          setPreviewSession(currentData, { preserveInput: true });
+        } else {
+          clearPreview();
         }
       }
     }
@@ -1030,6 +1613,23 @@
       if (minutes < 60) return `${minutes}m ago`;
       const hours = Math.floor(minutes / 60);
       return `${hours}h ago`;
+    }
+
+    function formatTimestamp(ts) {
+      if (!ts) return '—';
+      const date = new Date(ts);
+      return date.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      });
+    }
+
+    function formatPromiseStatus(status) {
+      if (!status) return 'Completed';
+      return status.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     }
 
     function truncatePath(path) {
@@ -1066,17 +1666,7 @@
     const ansiUp = new AnsiUp();
 
     async function viewOutput(sessionId, isRefresh = false) {
-      if (!isRefresh) {
-        currentSession = sessionId;
-        // Find displayName from sessions data
-        const sessionData = currentSessionsData.find(s => s.sessionId === sessionId);
-        const title = sessionData?.displayName
-          ? `${sessionData.displayName} (${sessionId})`
-          : sessionId;
-        document.getElementById('output-session-name').textContent = title;
-        document.getElementById('output-panel').classList.add('visible');
-        document.getElementById('message-input').value = '';
-      }
+      if (!sessionId) return;
 
       const response = await fetch(`/api/output?session=${sessionId}&lines=50`);
       const data = await response.json();
@@ -1094,8 +1684,8 @@
     }
 
     function closeOutput() {
-      document.getElementById('output-panel').classList.remove('visible');
-      currentSession = null;
+      clearPreview();
+      renderSessions(currentSessionsData);
     }
 
     async function sendMessage() {
@@ -1153,7 +1743,7 @@
     }
 
     function viewOrchestratorOutput() {
-      viewOutput('coder-orchestrator');
+      selectSession('coder-orchestrator');
     }
 
     async function killSession(sessionId) {
@@ -1196,8 +1786,8 @@
         if (e.key === 'Enter') sendToOrchestrator();
       });
 
-      // Initialize special keys grid
-      updateSpecialKeys();
+      // Initialize preview state
+      clearPreview();
 
       // Start SSE
       setupSSE();
@@ -1216,6 +1806,9 @@
           if (payload.type === 'sessions') {
             renderSessions(payload.data);
             updateStats(payload.data);
+          } else if (payload.type === 'reload') {
+            console.log('Reload signal received');
+            window.location.reload();
           }
         } catch (e) {
           console.error('SSE Parse Error:', e);
