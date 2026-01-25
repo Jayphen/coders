@@ -9,16 +9,31 @@
 
 import http from 'http';
 import { execSync } from 'child_process';
-import { readFileSync } from 'fs';
+import { readFileSync, watch } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Watch for changes to dashboard.html and trigger reload
+try {
+  const dashboardPath = join(__dirname, 'dashboard.html');
+  console.log(`[Dashboard] Watching for changes in ${dashboardPath}`);
+  watch(dashboardPath, (eventType, filename) => {
+    if (eventType === 'change') {
+      console.log(`[Dashboard] Detected change in ${filename}, reloading clients...`);
+      broadcast('reload', { timestamp: Date.now() });
+    }
+  });
+} catch (e) {
+  console.error('[Dashboard] Failed to setup file watcher:', e.message);
+}
+
 const ORCHESTRATOR_SESSION_ID = 'coder-orchestrator';
 
 const PORT = process.env.DASHBOARD_PORT || 3030;
+const HOST = process.env.DASHBOARD_HOST || '127.0.0.1';
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const HEARTBEAT_CHANNEL = 'coders:heartbeats';
 const PROMISES_CHANNEL = 'coders:promises';
@@ -794,8 +809,13 @@ async function start() {
   await loadSessionMetadata();
   await loadPromises();
 
-  server.listen(PORT, () => {
-    console.log(`\n🎯 Coders Dashboard running at http://localhost:${PORT}`);
+  server.listen(PORT, HOST, () => {
+    const hostLabel = HOST === '0.0.0.0' ? '0.0.0.0 (all interfaces)' : HOST;
+    console.log(`\n🎯 Coders Dashboard running at http://${HOST}:${PORT}`);
+    console.log(`🔗 Listening on ${hostLabel}`);
+    if (HOST === '0.0.0.0') {
+      console.log(`🌐 Use your machine's LAN IP to access from another device.`);
+    }
     console.log(`📊 Monitoring sessions with Redis heartbeats\n`);
   });
 }
