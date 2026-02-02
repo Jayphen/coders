@@ -59,6 +59,8 @@ export interface SpawnOptions {
   worktree?: string;
   baseBranch?: string;
   prd?: string;
+  /** Explicit constraints to prevent eager refactoring */
+  hardRules?: string[];
   interactive?: boolean;
   redis?: RedisConfig;
   enableHeartbeat?: boolean;
@@ -160,7 +162,8 @@ function buildCommand(
   redisConfig?: RedisConfig,
   sessionId?: string,
   parentSessionId?: string,
-  model?: string
+  model?: string,
+  hardRules?: string[]
 ): string {
   const envVars: string[] = [];
 
@@ -184,9 +187,13 @@ function buildCommand(
     envVars.push(`REDIS_URL="${redisConfig.url}"`);
   }
 
+  if (hardRules && hardRules.length > 0) {
+    envVars.push(`CODERS_HARD_RULES="${hardRules.join('\n- ')}"`);
+  }
+
   const env = envVars.length > 0 ? envVars.join(' ') + ' ' : '';
   const modelArg = model ? ` --model "${model}"` : '';
-  
+
   if (tool === 'claude' || tool === 'claude-code') {
     return `${env}claude --dangerously-spawn-permission${modelArg} -f "${promptFile}"`;
   } else if (tool === 'gemini') {
@@ -201,19 +208,46 @@ function buildCommand(
 
 /**
  * Generate a prompt file with task, context, and pane ID injection
+ * Uses the proven delegation template from multi-agent research
  */
 function createPrompt(task: string, contextFiles?: string[], paneId?: string, redisConfig?: RedisConfig): string {
   let prompt = '';
-  
+
   // Inject pane ID context if provided
   if (paneId) {
     prompt += injectPaneIdContext('', paneId);
   }
-  
-  prompt += `TASK: ${task}\n\n`;
-  
+
+  prompt += `TASK: ${task}
+
+REPO: ${getGitRoot()}
+BRANCH: ${getCurrentBranch()}
+
+CONTEXT:
+- Complete the task above
+- Inspect the codebase to understand the structure before making changes
+- Preserve existing code patterns and conventions
+- Only modify files necessary for the task
+
+WHAT NOT TO TOUCH:
+- ${process.env.CODERS_HARD_RULES || 'Leave unrelated modules unchanged'}
+- Do NOT refactor code outside the task scope
+- Do NOT add new dependencies without explicit approval
+- Do NOT modify configuration files unless required
+
+HARD RULES:
+- Write tests to verify your implementation
+- If stuck: stop and report, do not improvise
+- If ambiguous: ask, do not assume
+- "Done" means tests pass, not just code written
+
+TEST:
+Run the test suite and paste the output. Show your work.
+
+`;
+
   if (contextFiles && contextFiles.length > 0) {
-    prompt += 'CONTEXT:\n';
+    prompt += '--- PRD / SPECIFICATIONS ---\n';
     contextFiles.forEach(file => {
       const content = readFile(file);
       if (content) {
@@ -222,7 +256,7 @@ function createPrompt(task: string, contextFiles?: string[], paneId?: string, re
     });
     prompt += '\n';
   }
-  
+
   // Add Redis info to prompt if configured
   if (redisConfig?.url) {
     prompt += `
@@ -241,7 +275,7 @@ Heartbeat format:
 Publish to Redis channel: ${HEARTBEAT_CHANNEL}
 `;
   }
-  
+
   return prompt;
 }
 
@@ -256,6 +290,7 @@ export async function spawn(options: SpawnOptions): Promise<string> {
     worktree,
     baseBranch = 'main',
     prd,
+    hardRules,
     interactive = true,
     redis: redisConfig,
     enableHeartbeat = !!redisConfig?.url,
@@ -316,7 +351,7 @@ export async function spawn(options: SpawnOptions): Promise<string> {
   fs.writeFileSync(promptFile, prompt);
 
   // Build command with environment variables (use effectiveCwd for WORKSPACE_DIR)
-  const cmd = buildCommand(tool, promptFile, effectiveCwd, paneId, redisConfig, sessionId, parentSessionId, model);
+  const cmd = buildCommand(tool, promptFile, effectiveCwd, paneId, redisConfig, sessionId, parentSessionId, model, hardRules);
 
   try {
     // Clean up existing session if any
@@ -415,6 +450,7 @@ export async function claude(
     model?: string;
     worktree?: string;
     prd?: string;
+    hardRules?: string[];
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
     cwd?: string;
@@ -430,6 +466,7 @@ export async function gemini(
     model?: string;
     worktree?: string;
     prd?: string;
+    hardRules?: string[];
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
     cwd?: string;
@@ -445,6 +482,7 @@ export async function codex(
     model?: string;
     worktree?: string;
     prd?: string;
+    hardRules?: string[];
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
     cwd?: string;
@@ -460,6 +498,7 @@ export async function opencode(
     model?: string;
     worktree?: string;
     prd?: string;
+    hardRules?: string[];
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
     cwd?: string;
@@ -478,6 +517,7 @@ export async function worktree(
     tool?: 'claude' | 'gemini' | 'codex' | 'opencode';
     model?: string;
     prd?: string;
+    hardRules?: string[];
     redis?: RedisConfig;
     enableHeartbeat?: boolean;
     cwd?: string;
@@ -489,6 +529,7 @@ export async function worktree(
     worktree: branchName,
     model: options?.model,
     prd: options?.prd,
+    hardRules: options?.hardRules,
     redis: options?.redis,
     enableHeartbeat: options?.enableHeartbeat,
     cwd: options?.cwd
