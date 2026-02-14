@@ -327,7 +327,8 @@ func buildToolCommand(tool, task, model, sessionID string, useOllama bool) strin
 	}
 
 	// Set environment variables
-	envVars := fmt.Sprintf("CODERS_SESSION_ID=%s", sessionID)
+	// Unset CLAUDECODE to allow nested Claude Code sessions
+	envVars := fmt.Sprintf("CLAUDECODE= CODERS_SESSION_ID=%s", sessionID)
 
 	// Add Ollama env var mappings if --ollama flag is set
 	if useOllama {
